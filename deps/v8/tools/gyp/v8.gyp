@@ -645,6 +645,12 @@
                 ],
               }
             ],
+            ['OS=="ebbrt"', {
+                'sources': [
+                  '../../src/platform-ebbrt.cc',
+                ],
+              }
+            ],
             ['OS=="android"', {
                 'defines': [
                   'CAN_USE_VFP_INSTRUCTIONS',

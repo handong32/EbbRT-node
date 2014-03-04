@@ -60,6 +60,9 @@ static Handle<Value> GetHostname(const Arguments& args) {
   HandleScope scope;
   char buf[MAXHOSTNAMELEN + 1];
 
+#ifdef __ebbrt__
+  EBBRT_UNIMPLEMENTED();
+#else
   if (gethostname(buf, sizeof(buf))) {
 #ifdef __POSIX__
     return ThrowException(ErrnoException(errno, "gethostname"));
@@ -67,6 +70,7 @@ static Handle<Value> GetHostname(const Arguments& args) {
     return ThrowException(ErrnoException(WSAGetLastError(), "gethostname"));
 #endif // __MINGW32__
   }
+#endif
   buf[sizeof(buf) - 1] = '\0';
 
   return scope.Close(String::New(buf));
@@ -95,6 +99,8 @@ static Handle<Value> GetOSRelease(const Arguments& args) {
     return ThrowException(ErrnoException(errno, "uname"));
   }
   return scope.Close(String::New(info.release));
+#elif __ebbrt__
+  EBBRT_UNIMPLEMENTED();
 #else // __MINGW32__
   char release[256];
   OSVERSIONINFO info;

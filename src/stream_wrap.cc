@@ -120,6 +120,8 @@ StreamWrap::StreamWrap(Handle<Object> object, uv_stream_t* stream)
 Handle<Value> StreamWrap::GetFD(Local<String>, const AccessorInfo& args) {
 #if defined(_WIN32)
   return v8::Null();
+#elif defined(__ebbrt__)
+  EBBRT_UNIMPLEMENTED();
 #else
   HandleScope scope;
   UNWRAP_NO_ABORT(StreamWrap)

@@ -340,6 +340,9 @@ int uv_thread_create(uv_thread_t *tid, void (*entry)(void *arg), void *arg) {
 #ifdef _WIN32
   *tid = (HANDLE) _beginthreadex(NULL, 0, uv__thread_start, ctx, 0, NULL);
   if (*tid == 0) {
+#elif __ebbrt__
+  EBBRT_UNIMPLEMENTED();
+  {
 #else
   if (pthread_create(tid, NULL, uv__thread_start, ctx)) {
 #endif
@@ -354,6 +357,9 @@ int uv_thread_create(uv_thread_t *tid, void (*entry)(void *arg), void *arg) {
 unsigned long uv_thread_self(void) {
 #ifdef _WIN32
   return (unsigned long) GetCurrentThreadId();
+#elif __ebbrt__
+  EBBRT_UNIMPLEMENTED();
+  return 0;
 #else
   return (unsigned long) pthread_self();
 #endif

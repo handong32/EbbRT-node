@@ -10,7 +10,7 @@
 
   'target_defaults': {
     'conditions': [
-      ['OS != "win"', {
+      ['OS != "win" or OS != "ebbrt"', {
         'defines': [
           '_LARGEFILE_SOURCE',
           '_FILE_OFFSET_BITS=64',
@@ -19,7 +19,8 @@
         'conditions': [
           ['OS=="solaris"', {
             'cflags': [ '-pthreads' ],
-          }, {
+          }],
+          ['OS != "solaris" and OS != "ebbrt"', {
             'cflags': [ '-pthread' ],
           }],
         ],
@@ -117,7 +118,19 @@
               '-lws2_32.lib'
             ],
           },
-        }, { # Not Windows i.e. POSIX
+        }],
+        [ 'OS=="ebbrt"', {
+          'cflags': [
+            '-I ~/Work/SESA/EbbRT/baremetal/src/include',
+            '-g',
+            '--std=gnu89',
+            '-pedantic',
+            '-Wall',
+            '-Wextra',
+            '-Wno-unused-parameter',
+          ],
+        }],
+        [ 'OS!="win" and OS!="ebbrt"', { # Not Windows i.e. POSIX
           'cflags': [
             '-g',
             '--std=gnu89',

@@ -39,7 +39,7 @@
         'variables': {
           'conditions': [
             ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or \
-               OS=="netbsd" or OS=="mac"', {
+               OS=="netbsd" or OS=="mac" or OS=="ebbrt"', {
               # This handles the Unix platforms we generally deal with.
               # Anything else gets passed through, which probably won't work
               # very well; such hosts should pass an explicit target_arch
@@ -111,6 +111,22 @@
     }],
     # 'OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris"
     #  or OS=="netbsd"'
+    ['OS=="ebbrt"', {
+      'target_defaults': {
+        'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
+                    '-fno-exceptions', ],
+        'cflags_cc': [ '-Wnon-virtual-dtor', '-fno-rtti', 'fail' ],
+        'conditions': [
+          [ 'visibility=="hidden" and v8_enable_backtrace==0', {
+            'cflags': [ '-fvisibility=hidden' ],
+          }],
+          [ 'component=="shared_library"', {
+            'cflags': [ '-fPIC', ],
+          }],
+        ],
+      },
+    }],
+    # 'OS=="ebbrt"'
     ['OS=="win"', {
       'target_defaults': {
         'defines': [

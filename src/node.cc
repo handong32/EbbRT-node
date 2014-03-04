@@ -24,7 +24,9 @@
 #include "handle_wrap.h"
 #include "string_bytes.h"
 
+#ifndef __ebbrt__
 #include "ares.h"
+#endif
 #include "uv.h"
 
 #include "v8-debug.h"
@@ -1370,6 +1372,8 @@ static Handle<Value> Cwd(const Arguments& args) {
 #ifdef _WIN32
   /* MAX_PATH is in characters, not bytes. Make sure we have enough headroom. */
   char buf[MAX_PATH * 4 + 1];
+#elif __ebbrt__
+  char buf[4097];
 #else
   char buf[PATH_MAX + 1];
 #endif
@@ -1650,7 +1654,6 @@ static Handle<Value> SetGroups(const Arguments& args) {
 
   return Undefined();
 }
-
 
 static Handle<Value> InitGroups(const Arguments& args) {
   HandleScope scope;
@@ -2036,6 +2039,8 @@ static Handle<Value> EnvGetter(Local<String> property,
   if (val) {
     return scope.Close(String::New(val));
   }
+#elif __ebbrt__
+  EBBRT_UNIMPLEMENTED();
 #else  // _WIN32
   String::Value key(property);
   WCHAR buffer[32767]; // The maximum size allowed for environment variables.
@@ -2063,6 +2068,8 @@ static Handle<Value> EnvSetter(Local<String> property,
   String::Utf8Value key(property);
   String::Utf8Value val(value);
   setenv(*key, *val, 1);
+#elif __ebbrt__
+  EBBRT_UNIMPLEMENTED();
 #else  // _WIN32
   String::Value key(property);
   String::Value val(value);
@@ -2085,6 +2092,8 @@ static Handle<Integer> EnvQuery(Local<String> property,
   if (getenv(*key)) {
     return scope.Close(Integer::New(0));
   }
+#elif __ebbrt__
+  EBBRT_UNIMPLEMENTED();
 #else  // _WIN32
   String::Value key(property);
   WCHAR* key_ptr = reinterpret_cast<WCHAR*>(*key);
@@ -2113,6 +2122,8 @@ static Handle<Boolean> EnvDeleter(Local<String> property,
   if (!getenv(*key)) return False();
   unsetenv(*key); // can't check return value, it's void on some platforms
   return True();
+#elif __ebbrt__
+  EBBRT_UNIMPLEMENTED();
 #else
   String::Value key(property);
   WCHAR* key_ptr = reinterpret_cast<WCHAR*>(*key);
@@ -2142,6 +2153,9 @@ static Handle<Array> EnvEnumerator(const AccessorInfo& info) {
     const int length = s ? s - var : strlen(var);
     env->Set(i, String::New(var, length));
   }
+#elif __ebbrt__
+  Local<Array> env = Array::New();
+  EBBRT_UNIMPLEMENTED();
 #else  // _WIN32
   WCHAR* environment = GetEnvironmentStringsW();
   if (environment == NULL) {
@@ -2274,7 +2288,9 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   // +1 to get rid of the leading 'v'
   versions->Set(String::NewSymbol("node"), String::New(NODE_VERSION+1));
   versions->Set(String::NewSymbol("v8"), String::New(V8::GetVersion()));
+#ifndef __ebbrt__
   versions->Set(String::NewSymbol("ares"), String::New(ARES_VERSION_STR));
+#endif
   versions->Set(String::NewSymbol("uv"), String::New(uv_version_string()));
   versions->Set(String::NewSymbol("zlib"), String::New(ZLIB_VERSION));
   versions->Set(String::NewSymbol("modules"),
@@ -2370,7 +2386,11 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
     process->Set(String::NewSymbol("traceDeprecation"), True());
   }
 
+#ifdef __ebbrt
+  size_t size = 8192;
+#else
   size_t size = 2*PATH_MAX;
+#endif
   char* execPath = new char[size];
   if (uv_exepath(execPath, &size) != 0) {
     // as a last ditch effort, fallback on argv[0] ?
@@ -2956,7 +2976,7 @@ char** Init(int argc, char *argv[]) {
   } else {
 #ifdef _WIN32
     RegisterDebugSignalHandler();
-#else // Posix
+#elif !defined(__ebbrt__) // Posix
     static uv_signal_t signal_watcher;
     uv_signal_init(uv_default_loop(), &signal_watcher);
     uv_signal_start(&signal_watcher, EnableDebugSignalHandler, SIGUSR1);

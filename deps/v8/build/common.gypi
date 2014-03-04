@@ -278,7 +278,7 @@
         },
       }],
       ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris" \
-         or OS=="netbsd"', {
+         or OS=="netbsd" or OS=="ebbrt"', {
         'conditions': [
           [ 'v8_no_strict_aliasing==1', {
             'cflags': [ '-fno-strict-aliasing' ],
@@ -289,7 +289,7 @@
         'defines': [ '__C99FEATURES__=1' ],  # isinf() etc.
       }],
       ['(OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris" \
-         or OS=="netbsd" or OS=="mac" or OS=="android") and \
+         or OS=="netbsd" or OS=="mac" or OS=="android" or OS=="ebbrt") and \
         (v8_target_arch=="arm" or v8_target_arch=="ia32" or \
          v8_target_arch=="mipsel")', {
         # Check whether the host compiler and target compiler support the
@@ -357,7 +357,12 @@
         'conditions': [
           ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd"', {
             'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
-                        '-Wnon-virtual-dtor', '-Woverloaded-virtual' ],
+                        '-Wnon-virtual-dtor', '-Woverloaded-virtual', ],
+          }],
+          ['OS=="ebbrt"', {
+            'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
+                        '-Wnon-virtual-dtor', '-Woverloaded-virtual', '-Wno-unused-local-typedefs', '-U ebbrt',],
+            'cflags_cc': [ '-std=gnu++11' ],
           }],
           ['OS=="android"', {
             'variables': {
@@ -378,7 +383,7 @@
       'Release': {
         'conditions': [
           ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd" \
-            or OS=="android"', {
+            or OS=="android" or OS=="ebbrt"', {
             'conditions': [
               [ 'gcc_version==44 and clang==0', {
                 'cflags': [

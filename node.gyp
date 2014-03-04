@@ -64,7 +64,7 @@
   'targets': [
     {
       'target_name': 'node',
-      'type': 'executable',
+      'type': 'static_library',
 
       'dependencies': [
         'node_js2c#host',
@@ -238,10 +238,6 @@
           'dependencies': [ 'deps/http_parser/http_parser.gyp:http_parser' ],
         }],
 
-        [ 'node_shared_cares=="false"', {
-          'dependencies': [ 'deps/cares/cares.gyp:cares' ],
-        }],
-
         [ 'node_shared_libuv=="false"', {
           'dependencies': [ 'deps/uv/uv.gyp:libuv' ],
         }],
@@ -257,8 +253,17 @@
             '_UNICODE=1',
           ],
           'libraries': [ '-lpsapi.lib' ]
-        }, { # POSIX
+        }],
+        [ 'OS!="ebbrt" and OS!="win"', { # POSIX
           'defines': [ '__POSIX__' ],
+        }],
+        [ 'OS=="ebbrt"', {
+          'sources': [
+            'src/cares_wrap_ebbrt.cc',
+          ],
+          'sources!': [
+            'src/cares_wrap.cc',
+          ],
         }],
         [ 'OS=="mac"', {
           'libraries': [ '-framework Carbon' ],

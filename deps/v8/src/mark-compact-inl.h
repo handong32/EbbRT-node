@@ -29,7 +29,6 @@
 #define V8_MARK_COMPACT_INL_H_
 
 #include "isolate.h"
-#include "memory.h"
 #include "mark-compact.h"
 
 

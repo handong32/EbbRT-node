@@ -27,6 +27,10 @@
 
 #include "v8.h"
 
+#ifdef __ebbrt__
+#include <ebbrt/Random.h>
+#endif
+
 #include "assembler.h"
 #include "isolate.h"
 #include "elements.h"
@@ -136,7 +140,11 @@ static void seed_random(uint32_t* state) {
       entropy_source(reinterpret_cast<unsigned char*>(&val), sizeof(uint32_t));
       state[i] = val;
     } else {
+#ifdef __ebbrt__
+      state[i] = ebbrt::random::Get();
+#else
       state[i] = random();
+#endif
     }
   }
 }

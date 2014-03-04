@@ -29,6 +29,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#elif __ebbrt__
+#include <ebbrt/Debug.h>
 #else
 #include <sched.h>
 #endif
@@ -66,6 +68,8 @@ void CallOnceImpl(OnceType* once, PointerArgFunction init_func, void* arg) {
     while (state == ONCE_STATE_EXECUTING_FUNCTION) {
 #ifdef _WIN32
       ::Sleep(0);
+#elif __ebbrt__
+      EBBRT_UNIMPLEMENTED();
 #else
       sched_yield();
 #endif
