@@ -21,22 +21,38 @@
 #include <ebbrt/VMem.h>
 #include <ebbrt/VMemAllocator.h>
 
+double v8::internal::ceiling(double x) { EBBRT_UNIMPLEMENTED(); }
+
 double v8::internal::modulo(double x, double y) {
   EBBRT_UNIMPLEMENTED();
   return 0;
 }
+
+double v8::internal::fast_sin(double input) { EBBRT_UNIMPLEMENTED(); }
+
+double v8::internal::fast_cos(double input) { EBBRT_UNIMPLEMENTED(); }
+
+double v8::internal::fast_tan(double input) { EBBRT_UNIMPLEMENTED(); }
+
+double v8::internal::fast_log(double input) { EBBRT_UNIMPLEMENTED(); }
 
 double v8::internal::fast_sqrt(double input) {
   EBBRT_UNIMPLEMENTED();
   return 0;
 }
 
+void v8::internal::OS::SetUp() { EBBRT_UNIMPLEMENTED(); }
+
 void v8::internal::OS::PostSetUp() {}
 
-int v8::internal::OS::GetUserTime(uint32_t* secs, uint32_t* usecs) {
+void v8::internal::OS::TearDown() { EBBRT_UNIMPLEMENTED(); }
+
+int v8::internal::OS::GetUserTime(uint32_t *secs, uint32_t *usecs) {
   EBBRT_UNIMPLEMENTED();
   return 0;
 }
+
+int64_t v8::internal::OS::Ticks() { EBBRT_UNIMPLEMENTED(); }
 
 double v8::internal::OS::TimeCurrentMillis() {
   auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -44,7 +60,7 @@ double v8::internal::OS::TimeCurrentMillis() {
   return millis.count();
 }
 
-const char* v8::internal::OS::LocalTimezone(double time) {
+const char *v8::internal::OS::LocalTimezone(double time) {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
@@ -64,66 +80,66 @@ int v8::internal::OS::GetLastError() {
   return 0;
 }
 
-FILE* v8::internal::OS::FOpen(const char* path, const char* mode) {
+FILE *v8::internal::OS::FOpen(const char *path, const char *mode) {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
 
-bool v8::internal::OS::Remove(const char* path) {
+bool v8::internal::OS::Remove(const char *path) {
   EBBRT_UNIMPLEMENTED();
   return false;
 }
 
-FILE* v8::internal::OS::OpenTemporaryFile() {
+FILE *v8::internal::OS::OpenTemporaryFile() {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
 
-const char* const v8::internal::OS::LogFileOpenMode = "w";
+const char *const v8::internal::OS::LogFileOpenMode = "w";
 
-void v8::internal::OS::Print(const char* format, ...) { EBBRT_UNIMPLEMENTED(); }
+void v8::internal::OS::Print(const char *format, ...) { EBBRT_UNIMPLEMENTED(); }
 
-void v8::internal::OS::VPrint(const char* format, va_list args) {
+void v8::internal::OS::VPrint(const char *format, va_list args) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void v8::internal::OS::FPrint(FILE* out, const char* format, ...) {
+void v8::internal::OS::FPrint(FILE *out, const char *format, ...) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void v8::internal::OS::VFPrint(FILE* out, const char* format, va_list args) {
+void v8::internal::OS::VFPrint(FILE *out, const char *format, va_list args) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void v8::internal::OS::PrintError(const char* format, ...) {
+void v8::internal::OS::PrintError(const char *format, ...) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void v8::internal::OS::VPrintError(const char* format, va_list args) {
+void v8::internal::OS::VPrintError(const char *format, va_list args) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void* v8::internal::OS::Allocate(const size_t requested, size_t* allocated,
+void *v8::internal::OS::Allocate(const size_t requested, size_t *allocated,
                                  bool is_executable) {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
 
-void v8::internal::OS::Free(void* address, const size_t size) {
+void v8::internal::OS::Free(void *address, const size_t size) {
   EBBRT_UNIMPLEMENTED();
 }
 
 intptr_t v8::internal::OS::CommitPageSize() { return ebbrt::pmem::kPageSize; }
 
-void v8::internal::OS::ProtectCode(void* address, const size_t size) {
+void v8::internal::OS::ProtectCode(void *address, const size_t size) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void v8::internal::OS::Guard(void* address, const size_t size) {
+void v8::internal::OS::Guard(void *address, const size_t size) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void* v8::internal::OS::GetRandomMmapAddr() {
+void *v8::internal::OS::GetRandomMmapAddr() {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
@@ -133,25 +149,40 @@ size_t v8::internal::OS::AllocateAlignment() {
   return 0;
 }
 
+bool v8::internal::OS::IsOutsideAllocatedSpace(void *pointer) {
+  EBBRT_UNIMPLEMENTED();
+}
+
 void v8::internal::OS::Sleep(const int milliseconds) { EBBRT_UNIMPLEMENTED(); }
 
 void v8::internal::OS::Abort() { EBBRT_UNIMPLEMENTED(); }
 
 void v8::internal::OS::DebugBreak() { EBBRT_UNIMPLEMENTED(); }
 
-v8::internal::OS::MemoryMappedFile* v8::internal::OS::MemoryMappedFile::open(
-    const char* name) {
+v8::internal::Mutex *v8::internal::OS::CreateMutex() { EBBRT_UNIMPLEMENTED(); }
+
+v8::internal::Semaphore *v8::internal::OS::CreateSemaphore(int count) {
+  EBBRT_UNIMPLEMENTED();
+}
+
+v8::internal::Socket *v8::internal::OS::CreateSocket() {
+  EBBRT_UNIMPLEMENTED();
+}
+
+v8::internal::OS::MemoryMappedFile *
+v8::internal::OS::MemoryMappedFile::open(const char *name) {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
 
-v8::internal::OS::MemoryMappedFile* v8::internal::OS::MemoryMappedFile::create(
-    const char* name, int size, void* initial) {
+v8::internal::OS::MemoryMappedFile *
+v8::internal::OS::MemoryMappedFile::create(const char *name, int size,
+                                           void *initial) {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
 
-int v8::internal::OS::SNPrintF(Vector<char> str, const char* format, ...) {
+int v8::internal::OS::SNPrintF(Vector<char> str, const char *format, ...) {
   va_list args;
   va_start(args, format);
   auto result = VSNPrintF(str, format, args);
@@ -159,25 +190,28 @@ int v8::internal::OS::SNPrintF(Vector<char> str, const char* format, ...) {
   return result;
 }
 
-int v8::internal::OS::VSNPrintF(Vector<char> str, const char* format,
+int v8::internal::OS::VSNPrintF(Vector<char> str, const char *format,
                                 va_list args) {
   int n = vsnprintf(str.start(), str.length(), format, args);
   if (n < 0 || n >= str.length()) {
-    if (str.length() > 0) str[str.length() - 1] = '\0';
+    if (str.length() > 0)
+      str[str.length() - 1] = '\0';
     return -1;
   } else {
     return n;
   }
 }
 
-char* v8::internal::OS::StrChr(char* str, int c) {
+char *v8::internal::OS::StrChr(char *str, int c) {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
 
-void v8::internal::OS::StrNCpy(Vector<char> dest, const char* src, size_t n) {
+void v8::internal::OS::StrNCpy(Vector<char> dest, const char *src, size_t n) {
   EBBRT_UNIMPLEMENTED();
 }
+
+void v8::internal::OS::LogSharedLibraryAddresses() { EBBRT_UNIMPLEMENTED(); }
 
 void v8::internal::OS::SignalCodeMovingGC() { EBBRT_UNIMPLEMENTED(); }
 
@@ -194,6 +228,11 @@ bool v8::internal::OS::ArmUsingHardFloat() {
 
 int v8::internal::OS::ActivationFrameAlignment() { return 16; }
 
+void v8::internal::OS::ReleaseStore(volatile AtomicWord *ptr,
+                                    AtomicWord value) {
+  EBBRT_UNIMPLEMENTED();
+}
+
 int v8::internal::OS::GetCurrentProcessId() {
   EBBRT_UNIMPLEMENTED();
   return 0;
@@ -201,7 +240,7 @@ int v8::internal::OS::GetCurrentProcessId() {
 
 namespace {
 class V8PFHandler : public ebbrt::VMemAllocator::PageFaultHandler {
-  void HandleFault(ebbrt::idt::ExceptionFrame* ef,
+  void HandleFault(ebbrt::idt::ExceptionFrame *ef,
                    uintptr_t faulted_address) override {
     auto page = ebbrt::Pfn::Down(faulted_address);
     auto it = mappings_.find(page);
@@ -216,12 +255,12 @@ class V8PFHandler : public ebbrt::VMemAllocator::PageFaultHandler {
     }
   }
 
- private:
+private:
   std::unordered_map<ebbrt::Pfn, ebbrt::Pfn> mappings_;
 };
 }
 
-v8::internal::VirtualMemory::VirtualMemory() : address_{nullptr}, size_(0) {}
+v8::internal::VirtualMemory::VirtualMemory() : address_{ nullptr }, size_(0) {}
 
 v8::internal::VirtualMemory::VirtualMemory(size_t size) {
   auto sz = ebbrt::Pfn::Up(size).val();
@@ -229,7 +268,7 @@ v8::internal::VirtualMemory::VirtualMemory(size_t size) {
       sz, std::unique_ptr<V8PFHandler>(new V8PFHandler()));
   ebbrt::kbugon(pfn == ebbrt::Pfn::None(), "Page allocation failed\n");
   size_ = size;
-  address_ = reinterpret_cast<void*>(pfn.ToAddr());
+  address_ = reinterpret_cast<void *>(pfn.ToAddr());
   ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64 "\n",
                  pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
 }
@@ -242,9 +281,8 @@ v8::internal::VirtualMemory::VirtualMemory(size_t size, size_t alignment) {
       sz, align, std::unique_ptr<V8PFHandler>(new V8PFHandler()));
   ebbrt::kbugon(pfn == ebbrt::Pfn::None(), "Page allocation failed\n");
 
-
   size_ = size;
-  address_ = reinterpret_cast<void*>(pfn.ToAddr());
+  address_ = reinterpret_cast<void *>(pfn.ToAddr());
   ebbrt::kbugon(pfn.ToAddr() % alignment != 0, "Alignment failure\n");
   ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64 "\n",
                  pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
@@ -260,27 +298,27 @@ bool v8::internal::VirtualMemory::IsReserved() { return address_ != nullptr; }
 
 void v8::internal::VirtualMemory::Reset() { address_ = nullptr; }
 
-bool v8::internal::VirtualMemory::Commit(void* address, size_t size,
+bool v8::internal::VirtualMemory::Commit(void *address, size_t size,
                                          bool is_executable) {
   return CommitRegion(address, size, is_executable);
 }
 
-bool v8::internal::VirtualMemory::Uncommit(void* address, size_t size) {
+bool v8::internal::VirtualMemory::Uncommit(void *address, size_t size) {
   EBBRT_UNIMPLEMENTED();
   return false;
 }
 
-bool v8::internal::VirtualMemory::Guard(void* address) {
+bool v8::internal::VirtualMemory::Guard(void *address) {
   // TODO(dschatz): Actually implement this
   return true;
 }
 
-void* v8::internal::VirtualMemory::ReserveRegion(size_t size) {
+void *v8::internal::VirtualMemory::ReserveRegion(size_t size) {
   EBBRT_UNIMPLEMENTED();
   return nullptr;
 }
 
-bool v8::internal::VirtualMemory::CommitRegion(void* base, size_t size,
+bool v8::internal::VirtualMemory::CommitRegion(void *base, size_t size,
                                                bool is_executable) {
   auto addr = reinterpret_cast<uint64_t>(base);
   ebbrt::kprintf("Committed virtual region %#018" PRIx64 " - %#018" PRIx64 "\n",
@@ -288,17 +326,17 @@ bool v8::internal::VirtualMemory::CommitRegion(void* base, size_t size,
   return true;
 }
 
-bool v8::internal::VirtualMemory::UncommitRegion(void* base, size_t size) {
+bool v8::internal::VirtualMemory::UncommitRegion(void *base, size_t size) {
   EBBRT_UNIMPLEMENTED();
   return false;
 }
 
-bool v8::internal::VirtualMemory::ReleaseRegion(void* base, size_t size) {
+bool v8::internal::VirtualMemory::ReleaseRegion(void *base, size_t size) {
   EBBRT_UNIMPLEMENTED();
   return false;
 }
 
-v8::internal::Thread::Thread(const Options& options) {
+v8::internal::Thread::Thread(const Options &options) {
   set_name(options.name());
 }
 
@@ -306,7 +344,7 @@ v8::internal::Thread::~Thread() { EBBRT_UNIMPLEMENTED(); }
 
 void v8::internal::Thread::Start() { ebbrt::kprintf("Unstarted Thread!!!\n"); }
 
-void v8::internal::Thread::set_name(const char* name) {
+void v8::internal::Thread::set_name(const char *name) {
   strncpy(name_, name, sizeof(name_));
   name_[sizeof(name_) - 1] = '\0';
 }
@@ -336,14 +374,14 @@ void v8::internal::Thread::DeleteThreadLocalKey(LocalStorageKey key) {
   EBBRT_UNIMPLEMENTED();
 }
 
-void* v8::internal::Thread::GetThreadLocal(LocalStorageKey key) {
+void *v8::internal::Thread::GetThreadLocal(LocalStorageKey key) {
   std::lock_guard<std::mutex> lock(key_map_mut);
   auto it = key_map.find(key);
   ebbrt::kbugon(it == key_map.end(), "Could not find key in map\n");
   return ebbrt_gthread_getspecific(it->second);
 }
 
-void v8::internal::Thread::SetThreadLocal(LocalStorageKey key, void* value) {
+void v8::internal::Thread::SetThreadLocal(LocalStorageKey key, void *value) {
   std::lock_guard<std::mutex> lock(key_map_mut);
   auto it = key_map.find(key);
   ebbrt::kbugon(it == key_map.end(), "Could not find key in map\n");
@@ -351,3 +389,17 @@ void v8::internal::Thread::SetThreadLocal(LocalStorageKey key, void* value) {
 }
 
 void v8::internal::Thread::YieldCPU() { EBBRT_UNIMPLEMENTED(); }
+
+bool v8::internal::Socket::SetUp() { EBBRT_UNIMPLEMENTED(); }
+int v8::internal::Socket::LastError() { EBBRT_UNIMPLEMENTED(); }
+
+v8::internal::Sampler::Sampler(Isolate *isolate, int interval)
+    : interval_(interval) {
+  EBBRT_UNIMPLEMENTED();
+}
+
+v8::internal::Sampler::~Sampler() { EBBRT_UNIMPLEMENTED(); }
+
+void v8::internal::Sampler::Start() { EBBRT_UNIMPLEMENTED(); }
+
+void v8::internal::Sampler::Stop() { EBBRT_UNIMPLEMENTED(); }

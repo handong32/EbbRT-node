@@ -129,6 +129,9 @@
             '-Wextra',
             '-Wno-unused-parameter',
           ],
+          'sources': [
+            'src/ebbrt/uv-ebbrt.c',
+          ],
         }],
         [ 'OS!="win" and OS!="ebbrt"', { # Not Windows i.e. POSIX
           'cflags': [
