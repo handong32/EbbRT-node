@@ -24,6 +24,12 @@
 #include "handle_wrap.h"
 #include "string_bytes.h"
 
+#ifdef __ebbrt__
+#undef ebbrt
+#include <ebbrt/Debug.h>
+#include <ebbrt/CDebug.h>
+#endif
+
 #ifndef __ebbrt__
 #include "ares.h"
 #endif
@@ -1173,16 +1179,18 @@ void DisplayExceptionLine(TryCatch &try_catch) {
 
   Handle<Message> message = try_catch.Message();
 
-  uv_tty_reset_mode();
+  // uv_tty_reset_mode();
 
-  fprintf(stderr, "\n");
+  // fprintf(stderr, "\n");
+  ebbrt::kprintf("\n");
 
   if (!message.IsEmpty()) {
     // Print (filename):(line number): (message).
     String::Utf8Value filename(message->GetScriptResourceName());
     const char *filename_string = *filename;
     int linenum = message->GetLineNumber();
-    fprintf(stderr, "%s:%i\n", filename_string, linenum);
+    ebbrt::kprintf("%s:%i\n", filename_string, linenum);
+    // fprintf(stderr, "%s:%i\n", filename_string, linenum);
     // Print line of source code.
     String::Utf8Value sourceline(message->GetSourceLine());
     const char *sourceline_string = *sourceline;
@@ -1214,15 +1222,19 @@ void DisplayExceptionLine(TryCatch &try_catch) {
     // fprintf(stderr, "---\nsourceline:%s\noffset:%d\nstart:%d\nend:%d\n---\n",
     // sourceline_string, start, end);
 
-    fprintf(stderr, "%s\n", sourceline_string);
+    //fprintf(stderr, "%s\n", sourceline_string);
+    ebbrt::kprintf("%s\n", sourceline_string);
     // Print wavy underline (GetUnderline is deprecated).
     for (int i = 0; i < start; i++) {
-      fputc((sourceline_string[i] == '\t') ? '\t' : ' ', stderr);
+      //fputc((sourceline_string[i] == '\t') ? '\t' : ' ', stderr);
+      ebbrt::kprintf((sourceline_string[i] == '\t') ? "\t" : " ");
     }
     for (int i = start; i < end; i++) {
-      fputc('^', stderr);
+      //fputc('^', stderr);
+      ebbrt::kprintf("^");
     }
-    fputc('\n', stderr);
+    //fputc('\n', stderr);
+    ebbrt::kprintf("\n");
   }
 }
 
@@ -2001,7 +2013,6 @@ static Handle<Value> EnvGetter(Local<String> property,
     return scope.Close(String::New(val));
   }
 #elif __ebbrt__
-  EBBRT_UNIMPLEMENTED();
 #else // _WIN32
   String::Value key(property);
   WCHAR buffer[32767]; // The maximum size allowed for environment variables.
@@ -2295,7 +2306,9 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   Local<Object> env = envTemplate->NewInstance();
   process->Set(String::NewSymbol("env"), env);
 
+#ifndef __ebbrt
   process->Set(String::NewSymbol("pid"), Integer::New(getpid()));
+#endif
   process->Set(String::NewSymbol("features"), GetFeatures());
   process->SetAccessor(String::New("_needImmediateCallback"),
                        NeedImmediateCallbackGetter,

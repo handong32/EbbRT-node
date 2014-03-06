@@ -39,6 +39,10 @@
 # include <sys/utsname.h>
 #endif
 
+#ifdef __ebbrt__
+#include <ebbrt/CDebug.h>
+#endif
+
 // Add Windows fallback.
 #ifndef MAXHOSTNAMELEN
 # define MAXHOSTNAMELEN 256

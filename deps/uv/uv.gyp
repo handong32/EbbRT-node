@@ -123,14 +123,19 @@
           'cflags': [
             '-I ~/Work/SESA/EbbRT/baremetal/src/include',
             '-g',
-            '--std=gnu89',
-            '-pedantic',
             '-Wall',
             '-Wextra',
             '-Wno-unused-parameter',
           ],
+          'cflags_c': [
+            '--std=gnu89',
+            '-pedantic',
+           ],
+           'cflags_cc': [
+            '--std=gnu++11',
+           ],
           'sources': [
-            'src/ebbrt/uv-ebbrt.c',
+            'src/ebbrt/uv-ebbrt.cc',
           ],
         }],
         [ 'OS!="win" and OS!="ebbrt"', { # Not Windows i.e. POSIX

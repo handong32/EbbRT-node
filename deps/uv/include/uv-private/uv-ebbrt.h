@@ -3,8 +3,6 @@
 
 #include "ngx-queue.h"
 
-#include <ebbrt/CDebug.h>
-
 struct addrinfo {
   void *p;
 };
@@ -163,7 +161,9 @@ typedef struct {
 
 #define UV_CHECK_PRIVATE_FIELDS /* empty */
 
-#define UV_IDLE_PRIVATE_FIELDS /* empty */
+#define UV_IDLE_PRIVATE_FIELDS                                                 \
+  uv_idle_cb idle_cb;                                                          \
+  ngx_queue_t queue;
 
 #define UV_ASYNC_PRIVATE_FIELDS /* empty */
 
@@ -175,13 +175,19 @@ typedef struct {
 
 #define UV_WORK_PRIVATE_FIELDS /* empty */
 
-#define UV_FS_PRIVATE_FIELDS /* empty */
+#define UV_FS_PRIVATE_FIELDS                                                   \
+  uv_file file;                                                                \
+  void *buf;                                                                   \
+  size_t len;                                                                  \
+  int64_t offset;
 
 #define UV_FS_EVENT_PRIVATE_FIELDS /* empty */
 
 #define UV_SIGNAL_PRIVATE_FIELDS /* empty */
 
-#define UV_LOOP_PRIVATE_FIELDS uint64_t time;
+#define UV_LOOP_PRIVATE_FIELDS                                                 \
+  uint64_t time;                                                               \
+  ngx_queue_t idle_handles;
 
 #define UV_DYNAMIC /* empty */
 

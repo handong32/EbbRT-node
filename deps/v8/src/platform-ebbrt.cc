@@ -21,7 +21,7 @@
 #include <ebbrt/VMem.h>
 #include <ebbrt/VMemAllocator.h>
 
-double v8::internal::ceiling(double x) { EBBRT_UNIMPLEMENTED(); }
+double v8::internal::ceiling(double x) { return ceil(x); }
 
 double v8::internal::modulo(double x, double y) {
   EBBRT_UNIMPLEMENTED();
@@ -41,7 +41,7 @@ double v8::internal::fast_sqrt(double input) {
   return 0;
 }
 
-void v8::internal::OS::SetUp() { EBBRT_UNIMPLEMENTED(); }
+void v8::internal::OS::SetUp() {}
 
 void v8::internal::OS::PostSetUp() {}
 
@@ -52,7 +52,11 @@ int v8::internal::OS::GetUserTime(uint32_t *secs, uint32_t *usecs) {
   return 0;
 }
 
-int64_t v8::internal::OS::Ticks() { EBBRT_UNIMPLEMENTED(); }
+int64_t v8::internal::OS::Ticks() {
+  auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+      ebbrt::clock::Time());
+  return micros.count();
+}
 
 double v8::internal::OS::TimeCurrentMillis() {
   auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -149,9 +153,7 @@ size_t v8::internal::OS::AllocateAlignment() {
   return 0;
 }
 
-bool v8::internal::OS::IsOutsideAllocatedSpace(void *pointer) {
-  EBBRT_UNIMPLEMENTED();
-}
+bool v8::internal::OS::IsOutsideAllocatedSpace(void *pointer) { return false; }
 
 void v8::internal::OS::Sleep(const int milliseconds) { EBBRT_UNIMPLEMENTED(); }
 
@@ -159,10 +161,40 @@ void v8::internal::OS::Abort() { EBBRT_UNIMPLEMENTED(); }
 
 void v8::internal::OS::DebugBreak() { EBBRT_UNIMPLEMENTED(); }
 
-v8::internal::Mutex *v8::internal::OS::CreateMutex() { EBBRT_UNIMPLEMENTED(); }
+namespace {
+class StdMutexWrapper : public v8::internal::Mutex {
+  int Lock() override {
+    mut_.lock();
+    return 0;
+  }
+
+  int Unlock() override {
+    mut_.unlock();
+    return 0;
+  }
+
+  bool TryLock() override { return mut_.try_lock(); }
+
+private:
+  std::recursive_mutex mut_;
+};
+}
+v8::internal::Mutex *v8::internal::OS::CreateMutex() {
+  return new StdMutexWrapper();
+}
+
+namespace {
+class EbbRTSemaphore : public v8::internal::Semaphore {
+  void Wait() override { EBBRT_UNIMPLEMENTED(); }
+
+  bool Wait(int timeout) override { EBBRT_UNIMPLEMENTED(); }
+
+  void Signal() override { EBBRT_UNIMPLEMENTED(); }
+};
+}
 
 v8::internal::Semaphore *v8::internal::OS::CreateSemaphore(int count) {
-  EBBRT_UNIMPLEMENTED();
+  return new EbbRTSemaphore();
 }
 
 v8::internal::Socket *v8::internal::OS::CreateSocket() {
@@ -393,13 +425,19 @@ void v8::internal::Thread::YieldCPU() { EBBRT_UNIMPLEMENTED(); }
 bool v8::internal::Socket::SetUp() { EBBRT_UNIMPLEMENTED(); }
 int v8::internal::Socket::LastError() { EBBRT_UNIMPLEMENTED(); }
 
+class v8::internal::Sampler::PlatformData {};
+
 v8::internal::Sampler::Sampler(Isolate *isolate, int interval)
-    : interval_(interval) {
-  EBBRT_UNIMPLEMENTED();
+    : isolate_(isolate), interval_(interval), profiling_(false), active_(false),
+      samples_taken_(0) {
+  data_ = new PlatformData;
 }
 
 v8::internal::Sampler::~Sampler() { EBBRT_UNIMPLEMENTED(); }
 
-void v8::internal::Sampler::Start() { EBBRT_UNIMPLEMENTED(); }
+void v8::internal::Sampler::Start() {
+  ASSERT(!IsActive());
+  SetActive(true);
+}
 
 void v8::internal::Sampler::Stop() { EBBRT_UNIMPLEMENTED(); }

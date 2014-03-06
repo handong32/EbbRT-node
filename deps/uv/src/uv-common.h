@@ -188,7 +188,7 @@ void uv__fs_poll_close(uv_fs_poll_t* handle);
   }                                                                           \
   while (0)
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ebbrt__)
 # define uv__handle_platform_init(h)
 #else
 # define uv__handle_platform_init(h) ((h)->next_closing = NULL)
