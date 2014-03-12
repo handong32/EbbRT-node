@@ -122,13 +122,15 @@
         [ 'OS=="ebbrt"', {
           'cflags': [
             '-I ~/Work/SESA/EbbRT/baremetal/src/include',
+            '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include',
+            '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include/ipv4',
             '-g',
             '-Wall',
             '-Wextra',
             '-Wno-unused-parameter',
           ],
           'cflags_c': [
-            '--std=gnu89',
+            '--std=gnu99',
             '-pedantic',
            ],
            'cflags_cc': [

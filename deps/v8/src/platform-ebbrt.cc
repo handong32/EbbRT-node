@@ -45,7 +45,7 @@ void v8::internal::OS::SetUp() {}
 
 void v8::internal::OS::PostSetUp() {}
 
-void v8::internal::OS::TearDown() { EBBRT_UNIMPLEMENTED(); }
+void v8::internal::OS::TearDown() {}
 
 int v8::internal::OS::GetUserTime(uint32_t *secs, uint32_t *usecs) {
   EBBRT_UNIMPLEMENTED();
@@ -336,8 +336,7 @@ bool v8::internal::VirtualMemory::Commit(void *address, size_t size,
 }
 
 bool v8::internal::VirtualMemory::Uncommit(void *address, size_t size) {
-  EBBRT_UNIMPLEMENTED();
-  return false;
+  return UncommitRegion(address, size);
 }
 
 bool v8::internal::VirtualMemory::Guard(void *address) {
@@ -359,20 +358,26 @@ bool v8::internal::VirtualMemory::CommitRegion(void *base, size_t size,
 }
 
 bool v8::internal::VirtualMemory::UncommitRegion(void *base, size_t size) {
-  EBBRT_UNIMPLEMENTED();
-  return false;
+  auto addr = reinterpret_cast<uint64_t>(base);
+  ebbrt::kprintf("TODO(dschatz): Actually uncommit region %#018" PRIx64
+                 " - %#018" PRIx64 "\n",
+                 addr, addr + size - 1);
+  return true;
 }
 
 bool v8::internal::VirtualMemory::ReleaseRegion(void *base, size_t size) {
-  EBBRT_UNIMPLEMENTED();
-  return false;
+  auto addr = reinterpret_cast<uint64_t>(base);
+  ebbrt::kprintf("TODO(dschatz): Actually release region %#018" PRIx64
+                 " - %#018" PRIx64 "\n",
+                 addr, addr + size - 1);
+  return true;
 }
 
 v8::internal::Thread::Thread(const Options &options) {
   set_name(options.name());
 }
 
-v8::internal::Thread::~Thread() { EBBRT_UNIMPLEMENTED(); }
+v8::internal::Thread::~Thread() {}
 
 void v8::internal::Thread::Start() { ebbrt::kprintf("Unstarted Thread!!!\n"); }
 
@@ -433,11 +438,14 @@ v8::internal::Sampler::Sampler(Isolate *isolate, int interval)
   data_ = new PlatformData;
 }
 
-v8::internal::Sampler::~Sampler() { EBBRT_UNIMPLEMENTED(); }
+v8::internal::Sampler::~Sampler() { ASSERT(!IsActive()); }
 
 void v8::internal::Sampler::Start() {
   ASSERT(!IsActive());
   SetActive(true);
 }
 
-void v8::internal::Sampler::Stop() { EBBRT_UNIMPLEMENTED(); }
+void v8::internal::Sampler::Stop() {
+  ASSERT(IsActive());
+  SetActive(false);
+}

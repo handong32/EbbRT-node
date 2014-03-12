@@ -2062,7 +2062,7 @@ static Handle<Integer> EnvQuery(Local<String> property,
     return scope.Close(Integer::New(0));
   }
 #elif __ebbrt__
-  EBBRT_UNIMPLEMENTED();
+  ebbrt::kprintf("TODO(dschatz): Actually query the environment\n");
 #else // _WIN32
   String::Value key(property);
   WCHAR *key_ptr = reinterpret_cast<WCHAR *>(*key);

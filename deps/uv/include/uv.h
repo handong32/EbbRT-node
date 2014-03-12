@@ -1155,7 +1155,7 @@ UV_EXTERN int uv_check_stop(uv_check_t* check);
  * uv_idle_t is a subclass of uv_handle_t.
  *
  * Every active idle handle gets its callback called repeatedly until it is
- * stopped. This happens after all other types of callbacks are processed.
+ * stopped. This happen=-s after all other types of callbacks are processed.
  * When there are multiple "idle" handles active, their callbacks are called
  * in turn.
  */

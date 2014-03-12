@@ -3,10 +3,24 @@
 
 #include "ngx-queue.h"
 
+#include <lwip/def.h>
+
+typedef uint32_t socklen_t;
+
 struct addrinfo {
-  void *p;
+  int ai_flags;
+  int ai_family;
+  int ai_socktype;
+  int ai_protocol;
+  socklen_t ai_addrlen;
+  struct sockaddr *ai_addr;
+  char *ai_canonname;
+  struct addrinfo *ai_next;
 };
 
+#define SOCK_STREAM 1
+
+#define AF_UNSPEC 0
 #define AF_INET 2
 #define AF_INET6 10
 
@@ -22,6 +36,8 @@ typedef unsigned long in_addr_t;
 struct in_addr {
   in_addr_t s_addr;
 };
+
+#define INADDR_NONE 0xffffffff
 
 struct sockaddr_in {
   sa_family_t sin_family;
@@ -58,9 +74,6 @@ struct sockaddr_storage {
 };
 
 #define INET6_ADDRSTRLEN 46
-
-uint16_t htons(uint16_t n);
-uint16_t ntohs(uint16_t n);
 
 in_addr_t inet_addr(const char *cp);
 
@@ -139,11 +152,16 @@ typedef struct {
   int flags;                                                                   \
   uv_handle_t *next_closing;
 
-#define UV_STREAM_PRIVATE_FIELDS /* empty */
+#define UV_STREAM_PRIVATE_FIELDS                                               \
+  int pending_writes;                                                          \
+  uv_shutdown_t* shutdown_req;
 
 #define UV_WRITE_PRIVATE_FIELDS /* empty */
 
-#define UV_TCP_PRIVATE_FIELDS /* empty */
+#define UV_TCP_PRIVATE_FIELDS                                                  \
+  void *tcp_pcb;                                                               \
+  void *accepted_queue;                                                        \
+  void *buf;
 
 #define UV_CONNECT_PRIVATE_FIELDS /* empty */
 
@@ -159,7 +177,9 @@ typedef struct {
 
 #define UV_PREPARE_PRIVATE_FIELDS /* empty */
 
-#define UV_CHECK_PRIVATE_FIELDS /* empty */
+#define UV_CHECK_PRIVATE_FIELDS                                                \
+  uv_check_cb check_cb;                                                        \
+  ngx_queue_t queue;
 
 #define UV_IDLE_PRIVATE_FIELDS                                                 \
   uv_idle_cb idle_cb;                                                          \
@@ -169,17 +189,16 @@ typedef struct {
 
 #define UV_TIMER_PRIVATE_FIELDS /* empty */
 
-#define UV_GETADDRINFO_PRIVATE_FIELDS /* empty */
+#define UV_GETADDRINFO_PRIVATE_FIELDS                                          \
+  uv_getaddrinfo_cb cb;                                                        \
+  struct addrinfo *res;                                                        \
+  int retcode;
 
 #define UV_PROCESS_PRIVATE_FIELDS /* empty */
 
 #define UV_WORK_PRIVATE_FIELDS /* empty */
 
-#define UV_FS_PRIVATE_FIELDS                                                   \
-  uv_file file;                                                                \
-  void *buf;                                                                   \
-  size_t len;                                                                  \
-  int64_t offset;
+#define UV_FS_PRIVATE_FIELDS /* empty */
 
 #define UV_FS_EVENT_PRIVATE_FIELDS /* empty */
 
@@ -187,7 +206,10 @@ typedef struct {
 
 #define UV_LOOP_PRIVATE_FIELDS                                                 \
   uint64_t time;                                                               \
-  ngx_queue_t idle_handles;
+  ngx_queue_t idle_handles;                                                    \
+  void *event_context;                                                         \
+  void *callbacks;                                                             \
+  int blocking;
 
 #define UV_DYNAMIC /* empty */
 

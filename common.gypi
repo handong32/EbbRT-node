@@ -169,8 +169,8 @@
         ],
       }],
       [ 'OS=="ebbrt"', {
-        'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter', '-I ~/Work/SESA/EbbRT/baremetal/src/include', '-I ~/Work/SESA/EbbRT/common/src/include', '-I ~/Work/SESA/EbbRT/baremetal/ext/boost/include', ],
-        'cflags_cc': [ '-fno-rtti', '-fno-exceptions' ],
+        'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter', '-I ~/Work/SESA/EbbRT/baremetal/src/include', '-I ~/Work/SESA/EbbRT/common/src/include', '-I ~/Work/SESA/EbbRT/baremetal/ext/boost/include', '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include'],
+        #'cflags_cc': [ '-fno-rtti', '-fno-exceptions' ],
         'target_conditions': [
           ['_type=="static_library"', {
             'standalone_static_library': 1, # disable thin archive which needs binutils >= 2.19

@@ -2,10 +2,13 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <climits>
 #include <cstring>
+#include <queue>
 
 #include <ebbrt/Clock.h>
 #include <ebbrt/Debug.h>
+#include <ebbrt/Net.h>
 
 #include "uv.h"
 extern "C" {
@@ -20,29 +23,170 @@ extern "C" int uv_async_init(uv_loop_t *loop, uv_async_t *handle,
 extern "C" int uv_async_send(uv_async_t *handle) { EBBRT_UNIMPLEMENTED(); }
 
 namespace {
-uv_loop_t default_loop_struct;
-uv_loop_t *default_loop_ptr;
+/* handle flags */
+enum {
+  UV_CLOSING = 0x01,           /* uv_close() called but not finished. */
+  UV_CLOSED = 0x02,            /* close(2) finished. */
+  UV_STREAM_READING = 0x04,    /* uv_read_start() called. */
+  UV_STREAM_SHUTTING = 0x08,   /* uv_shutdown() called but not complete. */
+  UV_STREAM_SHUT = 0x10,       /* Write side closed. */
+  UV_STREAM_READABLE = 0x20,   /* The stream is readable */
+  UV_STREAM_WRITABLE = 0x40,   /* The stream is writable */
+  UV_STREAM_BLOCKING = 0x80,   /* Synchronous writes. */
+  UV_TCP_NODELAY = 0x100,      /* Disable Nagle. */
+  UV_TCP_KEEPALIVE = 0x200,    /* Turn on keep-alive. */
+  UV_TCP_SINGLE_ACCEPT = 0x400 /* Only accept() when idle. */
+};
+
+template <typename T>
+void uv__req_init(uv_loop_t *loop, T *req, uv_req_type type) {
+  auto r = (uv_req_t *)req;
+  r->type = type;
+  uv__req_register(loop, r);
 }
 
-void uv__loop_init(uv_loop_t *loop) {
+uv_loop_t default_loop_struct;
+uv_loop_t *default_loop_ptr;
+
+void activate_loop(uv_loop_t *loop) {
+  auto context =
+      static_cast<ebbrt::EventManager::EventContext *>(loop->event_context);
+  ebbrt::event_manager->ActivateContext(std::move(*context));
+  loop->event_context = nullptr;
+}
+
+void uv_tcp_enqueue_read(uv_tcp_t *handle) {
+  auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(handle->buf);
+  if (!b)
+    return;
+
+  auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+      handle->loop->callbacks);
+  cb_queue->emplace([handle]() {
+    auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(handle->buf);
+    auto len = b->ComputeChainDataLength();
+    auto uv_buf = handle->alloc_cb((uv_handle_t *)handle, len);
+    assert(uv_buf.len > 0);
+    assert(uv_buf.base);
+    auto copy_len = std::min(len, uv_buf.len);
+    if (copy_len < len)
+      EBBRT_UNIMPLEMENTED();
+    size_t copied = 0;
+    while (copied < copy_len) {
+      auto to_copy = copy_len - copied;
+      if (b->Length() > to_copy) {
+        memcpy(&uv_buf.base[copied], b->Data(), to_copy);
+        copied += to_copy;
+        b->Advance(to_copy);
+      } else {
+        memcpy(&uv_buf.base[copied], b->Data(), b->Length());
+        copied += b->Length();
+        b = std::move(b->Pop());
+      }
+    }
+    handle->read_cb((uv_stream_t *)handle, copy_len, uv_buf);
+  });
+}
+
+int uv_tcp_listen(uv_tcp_t *handle, int backlog, uv_connection_cb cb) {
+  auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
+  pcb->ListenWithBacklog(backlog);
+  pcb->Accept([cb, handle](ebbrt::NetworkManager::TcpPcb pcb) {
+    auto accept_queue =
+        static_cast<std::queue<ebbrt::NetworkManager::TcpPcb *> *>(
+            handle->accepted_queue);
+    accept_queue->push(new ebbrt::NetworkManager::TcpPcb(std::move(pcb)));
+
+    auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+        handle->loop->callbacks);
+
+    cb_queue->emplace([handle, cb]() { cb((uv_stream_t *)handle, 0); });
+    activate_loop(handle->loop);
+  });
+  return 0;
+}
+
+int uv_tcp_accept(uv_tcp_t *server, uv_tcp_t *client) {
+  auto accept_queue =
+      static_cast<std::queue<ebbrt::NetworkManager::TcpPcb *> *>(
+          server->accepted_queue);
+  auto pcb = accept_queue->front();
+  client->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
+  client->tcp_pcb = pcb;
+  accept_queue->pop();
+  pcb->Receive([client](ebbrt::NetworkManager::TcpPcb &pcb,
+                        std::unique_ptr<ebbrt::IOBuf> &&buf) {
+    if (!(client->flags & UV_CLOSING || client->flags & UV_CLOSED)) {
+      if (buf->ComputeChainDataLength() <= 0) {
+        if (!(client->flags & UV_STREAM_READING))
+          EBBRT_UNIMPLEMENTED();
+        auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+            client->loop->callbacks);
+
+        cb_queue->emplace([client]() {
+          auto uv_buf = client->alloc_cb((uv_handle_t *)client, 8);
+          assert(uv_buf.len > 0);
+          assert(uv_buf.base);
+          client->read_cb((uv_stream_t *)client, -1, uv_buf);
+        });
+        activate_loop(client->loop);
+      } else {
+        auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(client->buf);
+        if (b) {
+          b->AppendChain(std::move(buf));
+        } else {
+          b = std::move(buf);
+        }
+
+        if (client->flags & UV_STREAM_READING) {
+          uv_tcp_enqueue_read(client);
+          activate_loop(client->loop);
+        }
+      }
+    }
+  });
+
+  return 0;
+}
+
+int uv_pipe_listen(uv_pipe_t *handle, int backlog, uv_connection_cb cb) {
+  EBBRT_UNIMPLEMENTED();
+}
+
+void uv__update_time(uv_loop_t *loop) {
+  auto time_ns = ebbrt::clock::Time();
+  auto time_us = std::chrono::duration_cast<std::chrono::microseconds>(time_ns);
+  loop->time = time_us.count();
+}
+}
+
+int uv__loop_init(uv_loop_t *loop) {
   ngx_queue_init(&loop->handle_queue);
   ngx_queue_init(&loop->active_reqs);
   ngx_queue_init(&loop->idle_handles);
+  try {
+    loop->callbacks = new std::queue<std::function<void()> >();
+  }
+  catch (...) {
+    return -1;
+  }
+  uv__update_time(loop);
+
+  return 0;
 }
 
 extern "C" uv_loop_t *uv_default_loop(void) {
   if (!default_loop_ptr) {
     default_loop_ptr = &default_loop_struct;
-    uv__loop_init(default_loop_ptr);
+    if (uv__loop_init(default_loop_ptr) < 0) {
+      return NULL;
+    }
   }
 
   return default_loop_ptr;
 }
 
 namespace {
-uv_fs_t *fs_req;
-size_t read_len;
-
 void uv__run_idle(uv_loop_t *loop) {
   uv_idle_t *h;
   ngx_queue_t *q;
@@ -51,31 +195,75 @@ void uv__run_idle(uv_loop_t *loop) {
     h->idle_cb(h, 0);
   }
 }
+
+bool uv__loop_alive(uv_loop_t *loop) {
+  return uv__has_active_handles(loop) || uv__has_active_reqs(loop);
+}
+
+bool uv__block(uv_loop_t *loop) {
+  if (loop->stop_flag != 0)
+    return false;
+
+  if (!uv__has_active_handles(loop) && !uv__has_active_reqs(loop))
+    return false;
+
+  if (!ngx_queue_empty(&loop->idle_handles))
+    return false;
+
+  return true;
+}
 }
 
 extern "C" int uv_run(uv_loop_t *loop, uv_run_mode mode) {
-  while (1) {
+  auto r = uv__loop_alive(loop);
+  while (r != 0 && loop->stop_flag == 0) {
+    uv__update_time(loop);
     uv__run_idle(loop);
-    if (!fs_req)
-      EBBRT_UNIMPLEMENTED();
 
-    if (fs_req->file != 0)
-      EBBRT_UNIMPLEMENTED();
+    auto queue =
+        static_cast<std::queue<std::function<void()> > *>(loop->callbacks);
+    if (queue->empty()) {
+      // no pending callbacks, do we block or not?
+      bool block;
+      if (mode & UV_RUN_NOWAIT) {
+        block = false;
+      } else {
+        block = uv__block(loop);
+      }
 
-    const char script[] = "console.log(\"Hello World\");";
-    auto script_len = strlen(script);
-    if (read_len < script_len) {
-      auto len = std::min(script_len, fs_req->len);
-      std::strncpy(static_cast<char *>(fs_req->buf), script, len);
-      read_len += len;
-      fs_req->result = len;
-      fs_req->cb(fs_req);
-    } else {
-      fs_req->result = 0;
-      fs_req->cb(fs_req);
-      fs_req = nullptr;
+      if (uv__has_active_handles(loop) || uv__has_active_reqs(loop)) {
+        loop->blocking = block;
+        ebbrt::EventManager::EventContext context;
+        loop->event_context = &context;
+        // if we don't block then enqueue a callback to wake us up
+        if (!block)
+          EBBRT_UNIMPLEMENTED();
+        ebbrt::event_manager->SaveContext(context);
+      }
     }
+
+    if (queue->empty() && mode & UV_RUN_NOWAIT)
+      // We woke up, if there are still no callbacks and we were asked not to
+      // wait, then just break
+      break;
+
+    if (!queue->empty()) {
+      assert(!queue->empty());
+      auto f = std::move(queue->front());
+      queue->pop();
+      f();
+    }
+
+    r = uv__loop_alive(loop);
+
+    if (mode & UV_RUN_ONCE)
+      break;
   }
+
+  if (loop->stop_flag != 0)
+    loop->stop_flag = 0;
+
+  return r;
 }
 
 extern "C" int uv_dlopen(const char *filename, uv_lib_t *lib) {
@@ -92,6 +280,16 @@ extern "C" uv_err_code uv_translate_sys_error(int sys_errno) {
   EBBRT_UNIMPLEMENTED();
 }
 
+#define FS_INIT(type)                                                          \
+  uv__req_init((loop), (req), UV_FS);                                          \
+  (req)->fs_type = UV_FS_##type;                                               \
+  (req)->loop = (loop);                                                        \
+  (req)->cb = cb;                                                              \
+  (req)->result = 0;                                                           \
+  (req)->ptr = nullptr;                                                        \
+  (req)->path = nullptr;                                                       \
+  (req)->errorno = UV_OK;
+
 extern "C" int uv_fs_close(uv_loop_t *loop, uv_fs_t *req, uv_file file,
                            uv_fs_cb cb) {
   EBBRT_UNIMPLEMENTED();
@@ -102,24 +300,61 @@ extern "C" int uv_fs_open(uv_loop_t *loop, uv_fs_t *req, const char *path,
   EBBRT_UNIMPLEMENTED();
 }
 
+namespace {
+// const char script[] = "console.log(\"Hello World\");";
+// const char script[] =
+//     "var net = require('net');"
+//     "var server = net.createServer(function (socket) {"
+//     "  socket.end(\"Hello World\\n\");"
+//     "});"
+//     "server.listen(7000, \"localhost\");"
+//     "console.log(\"TCP server listening on port 7000 at localhost.\");";
+const char script[] =
+    "var net = require('net');\n"
+    "var server = net.createServer(function(c) { //'connection' listener\n"
+    "  console.log('server connected');\n"
+    "  c.on('end', function() {\n"
+    "    console.log('server disconnected');\n"
+    "  });\n"
+    "  c.write('hello\\r\\n');\n"
+    "  c.pipe(c);\n"
+    "});\n"
+    "server.listen(8124, function() { //'listening' listener\n"
+    "  console.log('server bound');\n"
+    "});";
+size_t read_len = 0;
+}
+
 extern "C" int uv_fs_read(uv_loop_t *loop, uv_fs_t *req, uv_file fd, void *buf,
                           size_t length, int64_t offset, uv_fs_cb cb) {
-  req->type = UV_FS;
-  req->fs_type = UV_FS_READ;
-  req->loop = loop;
-  req->cb = cb;
-  req->result = 0;
-  req->ptr = nullptr;
-  req->path = nullptr;
-  req->file = fd;
-  req->buf = buf;
-  req->len = length;
-  req->offset = offset;
+  FS_INIT(READ);
 
   if (!cb)
     EBBRT_UNIMPLEMENTED();
 
-  fs_req = req;
+  if (fd != 0)
+    EBBRT_UNIMPLEMENTED();
+
+  if (offset != -1)
+    EBBRT_UNIMPLEMENTED();
+
+  auto cb_queue =
+      static_cast<std::queue<std::function<void()> > *>(loop->callbacks);
+  cb_queue->emplace([req, buf, length, cb]() {
+    auto script_len = strlen(script);
+    if (read_len < script_len) {
+      auto len = std::min(script_len, length);
+      std::strncpy(static_cast<char *>(buf), script, len);
+      read_len += len;
+      req->result = len;
+    } else {
+      req->result = 0;
+    }
+
+    uv__req_unregister(req->loop, req);
+
+    cb(req);
+  });
 
   return 0;
 }
@@ -131,12 +366,21 @@ extern "C" int uv_fs_unlink(uv_loop_t *loop, uv_fs_t *req, const char *path,
 
 extern "C" int uv_fs_write(uv_loop_t *loop, uv_fs_t *req, uv_file fd, void *buf,
                            size_t length, int64_t offset, uv_fs_cb cb) {
-  if (fd == 1 && !cb) {
-    ebbrt::kprintf("%.*s", length, static_cast<const char *>(buf));
-    return 0;
-  } else {
+  FS_INIT(WRITE);
+
+  if (fd != 1)
     EBBRT_UNIMPLEMENTED();
-  }
+
+  if (offset != -1)
+    EBBRT_UNIMPLEMENTED();
+
+  if (cb)
+    EBBRT_UNIMPLEMENTED();
+
+  ebbrt::kprintf("%.*s", length, static_cast<const char *>(buf));
+  uv__req_unregister(req->loop, req);
+
+  return 0;
 }
 
 extern "C" int uv_fs_mkdir(uv_loop_t *loop, uv_fs_t *req, const char *path,
@@ -264,8 +508,57 @@ extern "C" int uv_is_active(const uv_handle_t *handle) {
   EBBRT_UNIMPLEMENTED();
 }
 
+namespace {
+void uv__tcp_close(uv_tcp_t *handle, uv_close_cb cb) {
+  bool x = true;
+  while (x)
+    ;
+  uv_read_stop((uv_stream_t *)handle);
+  uv__handle_stop((uv_handle_t *)handle);
+
+  // TODO(dschatz): This is really tricky, a bunch of outstanding requests could
+  // still exist in which case they should be canceled (if possible)
+  if (handle->shutdown_req)
+    EBBRT_UNIMPLEMENTED();
+
+  if (handle->pending_writes > 0)
+    EBBRT_UNIMPLEMENTED();
+
+  auto accept_queue =
+      static_cast<std::queue<ebbrt::NetworkManager::TcpPcb *> *>(
+          handle->accepted_queue);
+
+  while (!accept_queue->empty()) {
+    auto pcb = accept_queue->front();
+    accept_queue->pop();
+    delete pcb;
+  }
+
+  auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
+  delete pcb;
+  auto buf = static_cast<std::unique_ptr<ebbrt::IOBuf> *>(handle->buf);
+  delete buf;
+  handle->flags &= ~UV_CLOSING;
+  handle->flags |= UV_CLOSED;
+  auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+      handle->loop->callbacks);
+
+  cb_queue->emplace([handle, cb]() { cb((uv_handle_t *)handle); });
+}
+}
+
 extern "C" void uv_close(uv_handle_t *handle, uv_close_cb cb) {
   EBBRT_UNIMPLEMENTED();
+  handle->flags |= UV_CLOSING;
+
+  switch (handle->type) {
+  case UV_TCP:
+    uv__tcp_close((uv_tcp_t *)handle, cb);
+    break;
+  default:
+    EBBRT_UNIMPLEMENTED();
+    break;
+  }
 }
 
 extern "C" int uv_idle_init(uv_loop_t *loop, uv_idle_t *handle) {
@@ -293,7 +586,11 @@ extern "C" int uv_idle_stop(uv_idle_t *handle) {
   return 0;
 }
 
-extern "C" int uv_check_init(uv_loop_t *loop, uv_check_t *handle) { return 0; }
+extern "C" int uv_check_init(uv_loop_t *loop, uv_check_t *handle) {
+  uv__handle_init(loop, (uv_handle_t *)handle, UV_CHECK);
+  handle->check_cb = nullptr;
+  return 0;
+}
 
 extern "C" int uv_check_start(uv_check_t *handle, uv_check_cb cb) {
   EBBRT_UNIMPLEMENTED();
@@ -399,11 +696,40 @@ extern "C" int uv_queue_work(uv_loop_t *loop, uv_work_t *req,
 
 extern "C" int uv_listen(uv_stream_t *stream, int backlog,
                          uv_connection_cb cb) {
-  EBBRT_UNIMPLEMENTED();
+  int r;
+
+  switch (stream->type) {
+  case UV_TCP:
+    r = uv_tcp_listen((uv_tcp_t *)stream, backlog, cb);
+    break;
+
+  case UV_NAMED_PIPE:
+    r = uv_pipe_listen((uv_pipe_t *)stream, backlog, cb);
+    break;
+
+  default:
+    EBBRT_UNIMPLEMENTED();
+    return -1;
+  }
+
+  if (r == 0)
+    uv__handle_start(stream);
+
+  return r;
 }
 
 extern "C" int uv_accept(uv_stream_t *server, uv_stream_t *client) {
-  EBBRT_UNIMPLEMENTED();
+  assert(server->loop == client->loop);
+
+  switch (server->type) {
+  case UV_TCP:
+    assert(server->type == client->type);
+    return uv_tcp_accept((uv_tcp_t *)server, (uv_tcp_t *)client);
+    break;
+  default:
+    EBBRT_UNIMPLEMENTED();
+    break;
+  }
 }
 
 extern "C" int uv_is_readable(const uv_stream_t *handle) {
@@ -427,19 +753,112 @@ extern "C" int uv_signal_stop(uv_signal_t *handle) { EBBRT_UNIMPLEMENTED(); }
 
 extern "C" int uv_read_start(uv_stream_t *stream, uv_alloc_cb alloc_cb,
                              uv_read_cb read_cb) {
-  EBBRT_UNIMPLEMENTED();
+  if (stream->flags & UV_CLOSING)
+    return uv__set_sys_error(stream->loop, EINVAL);
+
+  stream->flags |= UV_STREAM_READING;
+  stream->read_cb = read_cb;
+  stream->alloc_cb = alloc_cb;
+  uv__handle_start(stream);
+
+  switch (stream->type) {
+  case UV_TCP:
+    uv_tcp_enqueue_read((uv_tcp_t *)stream);
+    break;
+  default:
+    EBBRT_UNIMPLEMENTED();
+    break;
+  }
+  return 0;
 }
 
-extern "C" int uv_read_stop(uv_stream_t *stream) { EBBRT_UNIMPLEMENTED(); }
+extern "C" int uv_read_stop(uv_stream_t *stream) {
+  stream->flags &= ~UV_STREAM_READING;
+  stream->read_cb = nullptr;
+  stream->read2_cb = nullptr;
+  stream->alloc_cb = nullptr;
+  return 0;
+}
 
 extern "C" int uv_read2_start(uv_stream_t *stream, uv_alloc_cb alloc_cb,
                               uv_read2_cb read_cb) {
   EBBRT_UNIMPLEMENTED();
 }
 
+namespace {
+void check_shutdown(uv_stream_t *handle) {
+  if (handle->pending_writes == 0) {
+    auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+        handle->loop->callbacks);
+    cb_queue->emplace([handle]() {
+      assert(handle->shutdown_req);
+      auto req = handle->shutdown_req;
+      handle->shutdown_req = nullptr;
+      handle->flags &= ~UV_STREAM_SHUTTING;
+      uv__req_unregister(handle->loop, req);
+      // actually shutdown?
+      // switch (handle->type) {
+      // case UV_TCP: {
+      //   auto tcp_stream = (uv_tcp_t *)handle;
+      //   auto pcb =
+      // static_cast<ebbrt::NetworkManager::TcpPcb*>(tcp_stream->tcp_pcb);
+      //   pcb->ShutdownTx();
+      //   break;
+      // }
+      // default:
+      //   EBBRT_UNIMPLEMENTED();
+      //   break;
+      // }
+      handle->flags |= UV_STREAM_SHUT;
+
+      if (req->cb != nullptr)
+        req->cb(req, 0);
+    });
+  }
+}
+}
+
 extern "C" int uv_write(uv_write_t *req, uv_stream_t *handle, uv_buf_t bufs[],
                         int bufcnt, uv_write_cb cb) {
-  EBBRT_UNIMPLEMENTED();
+  uv__req_init(handle->loop, req, UV_WRITE);
+  req->cb = cb;
+  req->handle = handle;
+  req->send_handle = nullptr;
+
+  switch (handle->type) {
+  case UV_TCP: {
+    assert(bufcnt > 0);
+    auto b = ebbrt::IOBuf::TakeOwnership(bufs[0].base, bufs[0].len);
+    for (int i = 1; i < bufcnt; ++i) {
+      b->AppendChain(ebbrt::IOBuf::TakeOwnership(bufs[i].base, bufs[i].len));
+    }
+    auto tcp_stream = (uv_tcp_t *)handle;
+    auto pcb =
+        static_cast<ebbrt::NetworkManager::TcpPcb *>(tcp_stream->tcp_pcb);
+    handle->pending_writes++;
+    pcb->Send(std::move(b)).Then([req, handle, cb](ebbrt::Future<void> f) {
+      f.Get();
+      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+          handle->loop->callbacks);
+      cb_queue->emplace([handle, req, cb]() {
+        uv__req_unregister(handle->loop, req);
+        cb(req, 0);
+        handle->pending_writes--;
+        if (handle->flags & UV_STREAM_SHUTTING &&
+            !(handle->flags & UV_CLOSING) &&
+            !(handle->flags & UV_STREAM_SHUT)) {
+          check_shutdown(handle);
+        }
+      });
+      activate_loop(handle->loop);
+    });
+    break;
+  }
+  default:
+    EBBRT_UNIMPLEMENTED();
+    break;
+  }
+  return 0;
 }
 
 extern "C" int uv_write2(uv_write_t *req, uv_stream_t *handle, uv_buf_t bufs[],
@@ -449,7 +868,22 @@ extern "C" int uv_write2(uv_write_t *req, uv_stream_t *handle, uv_buf_t bufs[],
 
 extern "C" int uv_shutdown(uv_shutdown_t *req, uv_stream_t *handle,
                            uv_shutdown_cb cb) {
-  EBBRT_UNIMPLEMENTED();
+  if (!(handle->flags & UV_STREAM_WRITABLE) || handle->flags & UV_STREAM_SHUT ||
+      handle->flags & UV_STREAM_SHUTTING || handle->flags & UV_CLOSED ||
+      handle->flags & UV_CLOSING) {
+    uv__set_artificial_error(handle->loop, UV_ENOTCONN);
+    return -1;
+  }
+
+  uv__req_init(handle->loop, req, UV_SHUTDOWN);
+  req->handle = handle;
+  req->cb = cb;
+  handle->shutdown_req = req;
+  handle->flags |= UV_STREAM_SHUTTING;
+
+  check_shutdown(handle);
+
+  return 0;
 }
 
 extern "C" int uv_timer_init(uv_loop_t *loop, uv_timer_t *handle) {
@@ -528,7 +962,14 @@ extern "C" int uv_udp_set_broadcast(uv_udp_t *handle, int on) {
 }
 
 extern "C" int uv_tcp_init(uv_loop_t *loop, uv_tcp_t *handle) {
-  EBBRT_UNIMPLEMENTED();
+  uv__handle_init(loop, (uv_handle_t *)handle, UV_TCP);
+
+  handle->pending_writes = 0;
+  handle->shutdown_req = nullptr;
+  handle->tcp_pcb = new ebbrt::NetworkManager::TcpPcb;
+  handle->accepted_queue = new std::queue<ebbrt::NetworkManager::TcpPcb *>;
+  handle->buf = new std::unique_ptr<ebbrt::IOBuf>;
+  return 0;
 }
 
 extern "C" int uv_tcp_open(uv_tcp_t *handle, uv_os_sock_t sock) {
@@ -558,16 +999,128 @@ extern "C" int uv_tcp_getpeername(uv_tcp_t *handle, struct sockaddr *name,
   EBBRT_UNIMPLEMENTED();
 }
 
-extern "C" uint16_t htons(uint16_t n) {
-  return ((n & 0xff) << 8) | ((n & 0xff00) >> 8);
+// extern "C" uint16_t htons(uint16_t n) { return __builtin_bswap16(n); }
+
+// extern "C" uint16_t ntohs(uint16_t n) { return htons(n); }
+
+// extern "C" uint32_t htonl(uint32_t n) { return __builtin_bswap32(n); }
+
+/** From FreeBSD and licensed under their license terms */
+extern "C" int inet_aton(const char *cp, struct in_addr *addr) {
+  u_long parts[4];
+  in_addr_t val;
+  const char *c;
+  char *endptr;
+  int gotend, n;
+
+  c = (const char *)cp;
+  n = 0;
+
+  /*
+  * Run through the string, grabbing numbers until
+  * the end of the string, or some error
+  */
+  gotend = 0;
+  while (!gotend) {
+    unsigned long l;
+
+    l = strtoul(c, &endptr, 0);
+
+    if (l == ULONG_MAX || (l == 0 && endptr == c))
+      return (0);
+
+    val = (in_addr_t)l;
+
+    /*
+    * If the whole string is invalid, endptr will equal
+    * c.. this way we can make sure someone hasn't
+    * gone '.12' or something which would get past
+    * the next check.
+    */
+    if (endptr == c)
+      return (0);
+    parts[n] = val;
+    c = endptr;
+
+    /* Check the next character past the previous number's end */
+    switch (*c) {
+    case '.':
+
+      /* Make sure we only do 3 dots .. */
+      if (n == 3) /* Whoops. Quit. */
+        return (0);
+      n++;
+      c++;
+      break;
+
+    case '\0':
+      gotend = 1;
+      break;
+
+    default:
+      if (isspace((unsigned char)*c)) {
+        gotend = 1;
+        break;
+      } else {
+
+        /* Invalid character, then fail. */
+        return (0);
+      }
+    }
+  }
+
+  /* Concoct the address according to the number of parts specified. */
+  switch (n) {
+  case 0: /* a -- 32 bits */
+
+    /*
+    * Nothing is necessary here. Overflow checking was
+    * already done in strtoul().
+    */
+    break;
+  case 1: /* a.b -- 8.24 bits */
+    if (val > 0xffffff || parts[0] > 0xff)
+      return (0);
+    val |= parts[0] << 24;
+    break;
+
+  case 2: /* a.b.c -- 8.8.16 bits */
+    if (val > 0xffff || parts[0] > 0xff || parts[1] > 0xff)
+      return (0);
+    val |= (parts[0] << 24) | (parts[1] << 16);
+    break;
+
+  case 3: /* a.b.c.d -- 8.8.8.8 bits */
+    if (val > 0xff || parts[0] > 0xff || parts[1] > 0xff || parts[2] > 0xff)
+      return (0);
+    val |= (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8);
+    break;
+  }
+
+  if (addr != NULL)
+    addr->s_addr = htonl(val);
+  return (1);
 }
 
-extern "C" uint16_t ntohs(uint16_t n) { return htons(n); }
+extern "C" in_addr_t inet_addr(const char *cp) {
 
-extern "C" in_addr_t inet_addr(const char *cp) { EBBRT_UNIMPLEMENTED(); }
+  struct in_addr val;
+
+  if (inet_aton(cp, &val))
+    return val.s_addr;
+  return INADDR_NONE;
+}
 
 extern "C" int uv__tcp_bind(uv_tcp_t *handle, struct sockaddr_in addr) {
-  EBBRT_UNIMPLEMENTED();
+  if (!(addr.sin_addr.s_addr == 0 ||
+        addr.sin_addr.s_addr == inet_addr("127.0.0.1")))
+    EBBRT_UNIMPLEMENTED();
+
+  handle->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
+
+  auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
+  pcb->Bind(ntohs(addr.sin_port));
+  return 0;
 }
 
 extern "C" int uv__tcp_bind6(uv_tcp_t *handle, struct sockaddr_in6 addr) {
@@ -612,3 +1165,84 @@ extern "C" int uv__udp_recv_start(uv_udp_t *handle, uv_alloc_cb alloccb,
 }
 
 extern "C" int uv__udp_recv_stop(uv_udp_t *handle) { EBBRT_UNIMPLEMENTED(); }
+
+extern "C" int uv_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
+                              uv_getaddrinfo_cb getaddrinfo_cb,
+                              const char *node, const char *service,
+                              const struct addrinfo *hints) {
+  if (req == NULL || getaddrinfo_cb == NULL ||
+      (node == NULL && service == NULL))
+    return uv__set_artificial_error(loop, UV_EINVAL);
+
+  uv__req_init(loop, req, UV_GETADDRINFO);
+  req->loop = loop;
+  req->cb = getaddrinfo_cb;
+  req->res = static_cast<struct addrinfo *>(malloc(sizeof(struct addrinfo)));
+  req->retcode = 0;
+
+  if (req->res == nullptr) {
+    return uv__set_artificial_error(loop, UV_ENOMEM);
+  }
+
+  if (strcmp(node, "localhost") != 0)
+    EBBRT_UNIMPLEMENTED();
+
+  if (hints->ai_flags != 0)
+    EBBRT_UNIMPLEMENTED();
+  req->res->ai_flags = 0;
+
+  if (hints->ai_family != AF_UNSPEC)
+    EBBRT_UNIMPLEMENTED();
+  req->res->ai_family = AF_INET;
+
+  if (hints->ai_socktype != SOCK_STREAM)
+    EBBRT_UNIMPLEMENTED();
+  req->res->ai_socktype = SOCK_STREAM;
+
+  if (hints->ai_protocol != 0)
+    EBBRT_UNIMPLEMENTED();
+  req->res->ai_protocol = 0; // ?? not sure what to return
+
+  req->res->ai_addrlen = sizeof(sockaddr_in);
+
+  req->res->ai_addr =
+      static_cast<struct sockaddr *>(calloc(1, sizeof(sockaddr_in)));
+  if (req->res->ai_addr == nullptr) {
+    free(req->res);
+    return uv__set_artificial_error(loop, UV_ENOMEM);
+  }
+  auto addr = reinterpret_cast<sockaddr_in *>(req->res->ai_addr);
+  addr->sin_family = AF_INET;
+  addr->sin_port = 0;
+  uv_inet_pton(AF_INET, "127.0.0.1", &addr->sin_addr.s_addr);
+
+  req->res->ai_canonname = strdup("localhost");
+  if (req->res->ai_canonname == nullptr) {
+    free(req->res->ai_addr);
+    free(req->res);
+    return uv__set_artificial_error(loop, UV_ENOMEM);
+  }
+  req->res->ai_next = nullptr;
+
+  auto cb_queue =
+      static_cast<std::queue<std::function<void()> > *>(loop->callbacks);
+  cb_queue->emplace([req]() {
+    uv__req_unregister(req->loop, req);
+
+    req->cb(req, req->retcode, req->res);
+  });
+
+  return 0;
+}
+
+extern "C" void uv_freeaddrinfo(struct addrinfo *ai) {
+  if (ai) {
+    if (ai->ai_addr) {
+      free(ai->ai_addr);
+    }
+    if (ai->ai_canonname) {
+      free(ai->ai_canonname);
+    }
+    free(ai);
+  }
+}
