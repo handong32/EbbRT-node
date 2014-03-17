@@ -6,6 +6,7 @@
 #include "platform.h"
 
 #include <malloc.h>
+#include <sys/time.h>
 
 #include <cinttypes>
 #include <cstdarg>
@@ -53,15 +54,24 @@ int v8::internal::OS::GetUserTime(uint32_t *secs, uint32_t *usecs) {
 }
 
 int64_t v8::internal::OS::Ticks() {
-  auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
-      ebbrt::clock::Time());
-  return micros.count();
+  // gettimeofday has microsecond resolution.
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) < 0)
+    return 0;
+  return (static_cast<int64_t>(tv.tv_sec) * 1000000) + tv.tv_usec;
+  // auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+  //     ebbrt::clock::Time());
+  // return micros.count();
 }
 
 double v8::internal::OS::TimeCurrentMillis() {
-  auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
-      ebbrt::clock::Time());
-  return millis.count();
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) < 0) return 0.0;
+  return (static_cast<double>(tv.tv_sec) * 1000) +
+    (static_cast<double>(tv.tv_usec) / 1000);
+  // auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+  //     ebbrt::clock::Time());
+  // return millis.count();
 }
 
 const char *v8::internal::OS::LocalTimezone(double time) {
@@ -70,13 +80,18 @@ const char *v8::internal::OS::LocalTimezone(double time) {
 }
 
 double v8::internal::OS::LocalTimeOffset() {
-  EBBRT_UNIMPLEMENTED();
-  return 0;
+  auto tv = time(nullptr);
+  auto local_tv = *localtime(&tv);
+  auto gm_tv = *gmtime(&tv);
+  return difftime(mktime(&local_tv), mktime(&gm_tv)) * 1000;
 }
 
 double v8::internal::OS::DaylightSavingsOffset(double time) {
-  EBBRT_UNIMPLEMENTED();
-  return 0;
+  if (std::isnan(time)) return nan_value();
+  time_t tv = static_cast<time_t>(floor(time/1000));
+  struct tm* t = localtime(&tv);
+  if (t == NULL) return nan_value();
+  return t->tm_isdst > 0 ? 3600 * 1000 : 0;
 }
 
 int v8::internal::OS::GetLastError() {

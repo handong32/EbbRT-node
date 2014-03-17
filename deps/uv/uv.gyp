@@ -124,6 +124,7 @@
             '-I ~/Work/SESA/EbbRT/baremetal/src/include',
             '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include',
             '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include/ipv4',
+            '-I ~/Work/SESA/EbbRT/baremetal/ext/tbb/include',
             '-g',
             '-Wall',
             '-Wextra',

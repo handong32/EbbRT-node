@@ -9,6 +9,7 @@
 #include <ebbrt/Clock.h>
 #include <ebbrt/Debug.h>
 #include <ebbrt/Net.h>
+#include <ebbrt/Timer.h>
 
 #include "uv.h"
 extern "C" {
@@ -92,10 +93,26 @@ int uv_tcp_listen(uv_tcp_t *handle, int backlog, uv_connection_cb cb) {
   auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
   pcb->ListenWithBacklog(backlog);
   pcb->Accept([cb, handle](ebbrt::NetworkManager::TcpPcb pcb) {
+    auto t = new uv_tcp_t;
+    auto tcp_pcb = new ebbrt::NetworkManager::TcpPcb(std::move(pcb));
+    t->tcp_pcb = tcp_pcb;
+    t->buf = new std::unique_ptr<ebbrt::IOBuf>();
+    tcp_pcb->Receive([t](ebbrt::NetworkManager::TcpPcb &pcb,
+                         std::unique_ptr<ebbrt::IOBuf> &&buf) {
+      if (buf->ComputeChainDataLength() <= 0)
+        EBBRT_UNIMPLEMENTED();
+
+      auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(t->buf);
+      if (b) {
+        b->AppendChain(std::move(buf));
+      } else {
+        b = std::move(buf);
+      }
+    });
+
     auto accept_queue =
-        static_cast<std::queue<ebbrt::NetworkManager::TcpPcb *> *>(
-            handle->accepted_queue);
-    accept_queue->push(new ebbrt::NetworkManager::TcpPcb(std::move(pcb)));
+        static_cast<std::queue<uv_tcp_t *> *>(handle->accepted_queue);
+    accept_queue->push(std::move(t));
 
     auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
         handle->loop->callbacks);
@@ -108,12 +125,16 @@ int uv_tcp_listen(uv_tcp_t *handle, int backlog, uv_connection_cb cb) {
 
 int uv_tcp_accept(uv_tcp_t *server, uv_tcp_t *client) {
   auto accept_queue =
-      static_cast<std::queue<ebbrt::NetworkManager::TcpPcb *> *>(
-          server->accepted_queue);
-  auto pcb = accept_queue->front();
+      static_cast<std::queue<uv_tcp_t *> *>(server->accepted_queue);
+  auto uv_tcp = accept_queue->front();
   client->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
-  client->tcp_pcb = pcb;
+  // delete the previously allocated bufs
+  delete static_cast<ebbrt::NetworkManager::TcpPcb *>(client->tcp_pcb);
+  delete static_cast<std::unique_ptr<ebbrt::IOBuf> *>(client->buf);
+  client->tcp_pcb = uv_tcp->tcp_pcb;
+  client->buf = uv_tcp->buf;
   accept_queue->pop();
+  auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(client->tcp_pcb);
   pcb->Receive([client](ebbrt::NetworkManager::TcpPcb &pcb,
                         std::unique_ptr<ebbrt::IOBuf> &&buf) {
     if (!(client->flags & UV_CLOSING || client->flags & UV_CLOSED)) {
@@ -127,6 +148,7 @@ int uv_tcp_accept(uv_tcp_t *server, uv_tcp_t *client) {
           auto uv_buf = client->alloc_cb((uv_handle_t *)client, 8);
           assert(uv_buf.len > 0);
           assert(uv_buf.base);
+          uv__set_artificial_error(client->loop, UV_EOF);
           client->read_cb((uv_stream_t *)client, -1, uv_buf);
         });
         activate_loop(client->loop);
@@ -146,6 +168,8 @@ int uv_tcp_accept(uv_tcp_t *server, uv_tcp_t *client) {
     }
   });
 
+  delete uv_tcp;
+
   return 0;
 }
 
@@ -154,7 +178,7 @@ int uv_pipe_listen(uv_pipe_t *handle, int backlog, uv_connection_cb cb) {
 }
 
 void uv__update_time(uv_loop_t *loop) {
-  auto time_ns = ebbrt::clock::Time();
+  auto time_ns = ebbrt::clock::Wall::Now().time_since_epoch();
   auto time_us = std::chrono::duration_cast<std::chrono::microseconds>(time_ns);
   loop->time = time_us.count();
 }
@@ -309,19 +333,36 @@ namespace {
 //     "});"
 //     "server.listen(7000, \"localhost\");"
 //     "console.log(\"TCP server listening on port 7000 at localhost.\");";
+// const char script[] =
+//     "var net = require('net');\n"
+//     "var server = net.createServer(function(c) { //'connection' listener\n"
+//     "  console.log('server connected');\n"
+//     "  c.on('end', function() {\n"
+//     "    console.log('server disconnected');\n"
+//     "  });\n"
+//     "  c.write('hello\\r\\n');\n"
+//     "  c.pipe(c);\n"
+//     "});\n"
+//     "server.listen(8124, function() { //'listening' listener\n"
+//     "  console.log('server bound');\n"
+//     "});";
 const char script[] =
-    "var net = require('net');\n"
-    "var server = net.createServer(function(c) { //'connection' listener\n"
-    "  console.log('server connected');\n"
-    "  c.on('end', function() {\n"
-    "    console.log('server disconnected');\n"
-    "  });\n"
-    "  c.write('hello\\r\\n');\n"
-    "  c.pipe(c);\n"
+    "// Load the http module to create an http server.\n"
+    "var http = require('http');\n"
+    "\n"
+    "// Configure our HTTP server to respond with Hello World to all "
+    "requests.\n"
+    "var server = http.createServer(function (request, response) {\n"
+    "console.log(\"Request received\");\n"
+    "response.writeHead(200, {\"Content-Type\": \"text/plain\"});\n"
+    "response.end(\"Hello World\\n\");\n"
     "});\n"
-    "server.listen(8124, function() { //'listening' listener\n"
-    "  console.log('server bound');\n"
-    "});";
+    "\n"
+    "// Listen on port 8000, IP defaults to 127.0.0.1\n"
+    "server.listen(8000);\n"
+    "\n"
+    "// Put a friendly message on the terminal\n"
+    "console.log(\"Server running at http://127.0.0.1:8000/\");\n";
 size_t read_len = 0;
 }
 
@@ -368,7 +409,7 @@ extern "C" int uv_fs_write(uv_loop_t *loop, uv_fs_t *req, uv_file fd, void *buf,
                            size_t length, int64_t offset, uv_fs_cb cb) {
   FS_INIT(WRITE);
 
-  if (fd != 1)
+  if (!(fd == 1 || fd == 2))
     EBBRT_UNIMPLEMENTED();
 
   if (offset != -1)
@@ -510,9 +551,6 @@ extern "C" int uv_is_active(const uv_handle_t *handle) {
 
 namespace {
 void uv__tcp_close(uv_tcp_t *handle, uv_close_cb cb) {
-  bool x = true;
-  while (x)
-    ;
   uv_read_stop((uv_stream_t *)handle);
   uv__handle_stop((uv_handle_t *)handle);
 
@@ -548,7 +586,6 @@ void uv__tcp_close(uv_tcp_t *handle, uv_close_cb cb) {
 }
 
 extern "C" void uv_close(uv_handle_t *handle, uv_close_cb cb) {
-  EBBRT_UNIMPLEMENTED();
   handle->flags |= UV_CLOSING;
 
   switch (handle->type) {
@@ -634,7 +671,7 @@ extern "C" uv_err_t uv_cwd(char *buffer, size_t size) {
 extern "C" uv_err_t uv_chdir(const char *dir) { EBBRT_UNIMPLEMENTED(); }
 
 extern "C" uv_err_t uv_uptime(double *uptime) {
-  auto t = ebbrt::clock::Time();
+  auto t = ebbrt::clock::Uptime();
   *uptime = static_cast<double>(t.count()) / 1000000000;
   return uv_ok_;
 }
@@ -887,15 +924,38 @@ extern "C" int uv_shutdown(uv_shutdown_t *req, uv_stream_t *handle,
 }
 
 extern "C" int uv_timer_init(uv_loop_t *loop, uv_timer_t *handle) {
-  EBBRT_UNIMPLEMENTED();
+  uv__handle_init(loop, (uv_handle_t *)handle, UV_TIMER);
+  return 0;
 }
 
 extern "C" int uv_timer_start(uv_timer_t *handle, uv_timer_cb cb,
                               uint64_t timeout, uint64_t repeat) {
-  EBBRT_UNIMPLEMENTED();
+  auto timeout_ms = std::chrono::milliseconds(timeout);
+  if (repeat > 0)
+    EBBRT_UNIMPLEMENTED();
+
+  ebbrt::timer->Start(timeout_ms,
+                      [handle, cb]() {
+                        auto cb_queue =
+                            static_cast<std::queue<std::function<void()> > *>(
+                                handle->loop->callbacks);
+                        cb_queue->emplace([handle, cb]() {
+                          uv_timer_stop(handle);
+                          cb(handle, 0);
+                        });
+                      },
+                      /* repeat = */ false);
+
+  return 0;
 }
 
-extern "C" int uv_timer_stop(uv_timer_t *handle) { EBBRT_UNIMPLEMENTED(); }
+extern "C" int uv_timer_stop(uv_timer_t *handle) {
+  if (!uv__is_active(handle))
+    return 0;
+  uv__handle_stop(handle);
+
+  return 0;
+}
 
 extern "C" int uv_timer_again(uv_timer_t *handle) { EBBRT_UNIMPLEMENTED(); }
 
