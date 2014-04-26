@@ -114,7 +114,7 @@
     ['OS=="ebbrt"', {
       'target_defaults': {
         'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
-                    '-fno-exceptions', ],
+                    '-fno-exceptions', 'Wno-unused-local-typedefs' ],
         'cflags_cc': [ '-Wnon-virtual-dtor', '-fno-rtti', 'fail' ],
         'conditions': [
           [ 'visibility=="hidden" and v8_enable_backtrace==0', {

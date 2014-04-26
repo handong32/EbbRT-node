@@ -383,7 +383,7 @@
       'Release': {
         'conditions': [
           ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd" \
-            or OS=="android" or OS=="ebbrt"', {
+            or OS=="android"', {
             'conditions': [
               [ 'gcc_version==44 and clang==0', {
                 'cflags': [
@@ -392,6 +392,10 @@
                 ],
               }],
             ],
+          }],
+          ['OS=="ebbrt"', {
+            'cflags': [ '-U ebbrt', '-Wno-unused-local-typedefs' ],
+            'cflags_cc': [ '-std=gnu++11' ],
           }],
           ['OS=="mac"', {
             'xcode_settings': {
