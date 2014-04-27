@@ -11,6 +11,8 @@
 #include <ebbrt/Net.h>
 #include <ebbrt/Timer.h>
 
+#include "../../../../FileSystem.h"
+
 #include "uv.h"
 extern "C" {
 #include "uv-common.h"
@@ -314,6 +316,12 @@ extern "C" uv_err_code uv_translate_sys_error(int sys_errno) {
   (req)->path = nullptr;                                                       \
   (req)->errorno = UV_OK;
 
+#define FS_PATH                                                                \
+  do {                                                                         \
+    if (NULL == ((req)->path = strdup((path))))                                \
+      return uv__set_sys_error((loop), ENOMEM);                                \
+  } while (0)
+
 extern "C" int uv_fs_close(uv_loop_t *loop, uv_fs_t *req, uv_file file,
                            uv_fs_cb cb) {
   EBBRT_UNIMPLEMENTED();
@@ -365,6 +373,8 @@ const char script[] =
     "console.log(\"Server running at http://127.0.0.1:8000/\");\n";
 size_t read_len = 0;
 }
+
+extern ebbrt::EbbRef<FileSystem> node_fs_ebb;
 
 extern "C" int uv_fs_read(uv_loop_t *loop, uv_fs_t *req, uv_file fd, void *buf,
                           size_t length, int64_t offset, uv_fs_cb cb) {
@@ -466,12 +476,77 @@ extern "C" int uv_fs_fchown(uv_loop_t *loop, uv_fs_t *req, uv_file fd,
 
 extern "C" int uv_fs_stat(uv_loop_t *loop, uv_fs_t *req, const char *path,
                           uv_fs_cb cb) {
-  EBBRT_UNIMPLEMENTED();
+  FS_INIT(STAT);
+  FS_PATH;
+  auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
+    auto &stat_info = f.Get();
+    req->result = 0;
+    req->statbuf.st_dev = stat_info.stat_dev;
+    req->statbuf.st_ino = stat_info.stat_ino;
+    req->statbuf.st_mode = stat_info.stat_mode;
+    req->statbuf.st_nlink = stat_info.stat_nlink;
+    req->statbuf.st_uid = stat_info.stat_uid;
+    req->statbuf.st_gid = stat_info.stat_gid;
+    req->statbuf.st_rdev = stat_info.stat_rdev;
+    req->statbuf.st_size = stat_info.stat_size;
+    req->statbuf.st_atime = stat_info.stat_atime;
+    req->statbuf.st_mtime = stat_info.stat_mtime;
+    req->statbuf.st_ctime = stat_info.stat_ctime;
+    req->ptr = &req->statbuf;
+    auto cb_queue =
+        static_cast<std::queue<std::function<void()> > *>(req->loop->callbacks);
+    cb_queue->emplace([req]() {
+      uv__req_unregister(req->loop, req);
+      if (req->cb) {
+        req->cb(req);
+      }
+    });
+  };
+  auto f = node_fs_ebb->Stat(path);
+  if (cb) {
+    f.Then(std::move(func));
+  } else {
+    func(f.Block());
+  }
+  return 0;
 }
 
 extern "C" int uv_fs_lstat(uv_loop_t *loop, uv_fs_t *req, const char *path,
                            uv_fs_cb cb) {
-  EBBRT_UNIMPLEMENTED();
+  FS_INIT(LSTAT);
+  FS_PATH;
+  auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
+    auto &stat_info = f.Get();
+    req->result = 0;
+    req->statbuf.st_dev = stat_info.stat_dev;
+    req->statbuf.st_ino = stat_info.stat_ino;
+    req->statbuf.st_mode = stat_info.stat_mode;
+    req->statbuf.st_nlink = stat_info.stat_nlink;
+    req->statbuf.st_uid = stat_info.stat_uid;
+    req->statbuf.st_gid = stat_info.stat_gid;
+    req->statbuf.st_rdev = stat_info.stat_rdev;
+    req->statbuf.st_size = stat_info.stat_size;
+    req->statbuf.st_atime = stat_info.stat_atime;
+    req->statbuf.st_mtime = stat_info.stat_mtime;
+    req->statbuf.st_ctime = stat_info.stat_ctime;
+    req->ptr = &req->statbuf;
+    auto cb_queue =
+        static_cast<std::queue<std::function<void()> > *>(req->loop->callbacks);
+    cb_queue->emplace([req]() {
+      uv__req_unregister(req->loop, req);
+      if (req->cb) {
+        req->cb(req);
+      }
+    });
+  };
+  // TODO(dschatz): should actually lstat =(
+  auto f = node_fs_ebb->Stat(path);
+  if (cb) {
+    f.Then(std::move(func));
+  } else {
+    func(f.Block());
+  }
+  return 0;
 }
 
 extern "C" int uv_fs_fstat(uv_loop_t *loop, uv_fs_t *req, uv_file fd,
@@ -659,11 +734,11 @@ extern "C" uv_err_t uv_cwd(char *buffer, size_t size) {
     return uv__new_artificial_error(UV_EINVAL);
   }
 
-  if (size < 2)
+  auto f = node_fs_ebb->GetCwd().Block();
+  auto& str = f.Get();
+  if (size < str.size())
     return uv__new_sys_error(ERANGE);
-
-  buffer[0] = '/';
-  buffer[1] = '\0';
+  strncpy(buffer, str.data(), size);
 
   return uv_ok_;
 }
