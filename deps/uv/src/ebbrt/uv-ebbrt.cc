@@ -974,7 +974,8 @@ extern "C" int uv_write(uv_write_t *req, uv_stream_t *handle, uv_buf_t bufs[],
     assert(bufcnt > 0);
     auto b = ebbrt::IOBuf::TakeOwnership(bufs[0].base, bufs[0].len);
     for (int i = 1; i < bufcnt; ++i) {
-      b->AppendChain(ebbrt::IOBuf::TakeOwnership(bufs[i].base, bufs[i].len));
+      b->Prev()->AppendChain(
+          ebbrt::IOBuf::TakeOwnership(bufs[i].base, bufs[i].len));
     }
     auto tcp_stream = (uv_tcp_t *)handle;
     auto pcb =
