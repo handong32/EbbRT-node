@@ -154,7 +154,7 @@ typedef struct {
 
 #define UV_STREAM_PRIVATE_FIELDS                                               \
   int pending_writes;                                                          \
-  uv_shutdown_t* shutdown_req;
+  uv_shutdown_t *shutdown_req;
 
 #define UV_WRITE_PRIVATE_FIELDS /* empty */
 
