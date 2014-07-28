@@ -9,6 +9,7 @@
 #include <sys/time.h>
 
 #include <cinttypes>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <mutex>
@@ -22,29 +23,45 @@
 #include <ebbrt/VMem.h>
 #include <ebbrt/VMemAllocator.h>
 
+using std::isnan;
+using std::isfinite;
+
+#include "v8.h"
+
+#include "codegen.h"
+
 double v8::internal::ceiling(double x) { return ceil(x); }
 
-double v8::internal::modulo(double x, double y) {
-  EBBRT_UNIMPLEMENTED();
-  return 0;
-}
+double v8::internal::modulo(double x, double y) { return fmod(x, y); }
 
-double v8::internal::fast_sin(double input) { EBBRT_UNIMPLEMENTED(); }
+#define UNARY_MATH_FUNCTION(name, generator)                                   \
+  static v8::internal::UnaryMathFunction fast_##name##_function = NULL;        \
+  void init_fast_##name##_function() { fast_##name##_function = generator; }   \
+  double v8::internal::fast_##name(double x) {                                 \
+    return (*fast_##name##_function)(x);                                       \
+  }
 
-double v8::internal::fast_cos(double input) { EBBRT_UNIMPLEMENTED(); }
+UNARY_MATH_FUNCTION(sin, v8::internal::CreateTranscendentalFunction(
+                             v8::internal::TranscendentalCache::SIN))
+UNARY_MATH_FUNCTION(cos, v8::internal::CreateTranscendentalFunction(
+                             v8::internal::TranscendentalCache::COS))
+UNARY_MATH_FUNCTION(tan, v8::internal::CreateTranscendentalFunction(
+                             v8::internal::TranscendentalCache::TAN))
+UNARY_MATH_FUNCTION(log, v8::internal::CreateTranscendentalFunction(
+                             v8::internal::TranscendentalCache::LOG))
+UNARY_MATH_FUNCTION(sqrt, v8::internal::CreateSqrtFunction())
 
-double v8::internal::fast_tan(double input) { EBBRT_UNIMPLEMENTED(); }
-
-double v8::internal::fast_log(double input) { EBBRT_UNIMPLEMENTED(); }
-
-double v8::internal::fast_sqrt(double input) {
-  EBBRT_UNIMPLEMENTED();
-  return 0;
-}
+#undef MATH_FUNCTION
 
 void v8::internal::OS::SetUp() {}
 
-void v8::internal::OS::PostSetUp() {}
+void v8::internal::OS::PostSetUp() {
+  init_fast_sin_function();
+  init_fast_cos_function();
+  init_fast_tan_function();
+  init_fast_log_function();
+  init_fast_sqrt_function();
+}
 
 void v8::internal::OS::TearDown() {}
 
@@ -66,9 +83,10 @@ int64_t v8::internal::OS::Ticks() {
 
 double v8::internal::OS::TimeCurrentMillis() {
   struct timeval tv;
-  if (gettimeofday(&tv, NULL) < 0) return 0.0;
+  if (gettimeofday(&tv, NULL) < 0)
+    return 0.0;
   return (static_cast<double>(tv.tv_sec) * 1000) +
-    (static_cast<double>(tv.tv_usec) / 1000);
+         (static_cast<double>(tv.tv_usec) / 1000);
   // auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
   //     ebbrt::clock::Time());
   // return millis.count();
@@ -87,10 +105,12 @@ double v8::internal::OS::LocalTimeOffset() {
 }
 
 double v8::internal::OS::DaylightSavingsOffset(double time) {
-  if (std::isnan(time)) return nan_value();
-  time_t tv = static_cast<time_t>(floor(time/1000));
-  struct tm* t = localtime(&tv);
-  if (t == NULL) return nan_value();
+  if (std::isnan(time))
+    return nan_value();
+  time_t tv = static_cast<time_t>(floor(time / 1000));
+  struct tm *t = localtime(&tv);
+  if (t == NULL)
+    return nan_value();
   return t->tm_isdst > 0 ? 3600 * 1000 : 0;
 }
 
@@ -140,19 +160,20 @@ void v8::internal::OS::VPrintError(const char *format, va_list args) {
 
 void *v8::internal::OS::Allocate(const size_t requested, size_t *allocated,
                                  bool is_executable) {
-  EBBRT_UNIMPLEMENTED();
-  return nullptr;
+  const size_t msize = RoundUp(requested, AllocateAlignment());
+  auto mbase = malloc(msize);
+
+  *allocated = msize;
+  return mbase;
 }
 
 void v8::internal::OS::Free(void *address, const size_t size) {
-  EBBRT_UNIMPLEMENTED();
+  delete[] static_cast<uint8_t *>(address);
 }
 
 intptr_t v8::internal::OS::CommitPageSize() { return ebbrt::pmem::kPageSize; }
 
-void v8::internal::OS::ProtectCode(void *address, const size_t size) {
-  EBBRT_UNIMPLEMENTED();
-}
+void v8::internal::OS::ProtectCode(void *address, const size_t size) {}
 
 void v8::internal::OS::Guard(void *address, const size_t size) {
   EBBRT_UNIMPLEMENTED();
@@ -163,10 +184,7 @@ void *v8::internal::OS::GetRandomMmapAddr() {
   return nullptr;
 }
 
-size_t v8::internal::OS::AllocateAlignment() {
-  EBBRT_UNIMPLEMENTED();
-  return 0;
-}
+size_t v8::internal::OS::AllocateAlignment() { return 8; }
 
 bool v8::internal::OS::IsOutsideAllocatedSpace(void *pointer) { return false; }
 
@@ -285,6 +303,9 @@ int v8::internal::OS::GetCurrentProcessId() {
   return 0;
 }
 
+#define LARGE_PAGES
+
+#ifndef LARGE_PAGES
 namespace {
 class V8PFHandler : public ebbrt::VMemAllocator::PageFaultHandler {
   void HandleFault(ebbrt::idt::ExceptionFrame *ef,
@@ -305,34 +326,57 @@ class V8PFHandler : public ebbrt::VMemAllocator::PageFaultHandler {
 private:
   std::unordered_map<ebbrt::Pfn, ebbrt::Pfn> mappings_;
 };
+
+const constexpr size_t max_phys_mem_allocation = 8 * 1024 * 1024;
 }
+#endif
 
 v8::internal::VirtualMemory::VirtualMemory() : address_{ nullptr }, size_(0) {}
 
 v8::internal::VirtualMemory::VirtualMemory(size_t size) {
-  auto sz = ebbrt::Pfn::Up(size).val();
-  auto pfn = ebbrt::vmem_allocator->Alloc(
-      sz, std::unique_ptr<V8PFHandler>(new V8PFHandler()));
-  ebbrt::kbugon(pfn == ebbrt::Pfn::None(), "Page allocation failed\n");
-  size_ = size;
-  address_ = reinterpret_cast<void *>(pfn.ToAddr());
-  ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64 "\n",
-                 pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
+#ifndef LARGE_PAGES
+  if (size <= max_phys_mem_allocation) {
+#endif
+    size_ = size;
+    address_ = malloc(size);
+#ifndef LARGE_PAGES
+  } else {
+    auto sz = ebbrt::Pfn::Up(size).val();
+    auto pfn = ebbrt::vmem_allocator->Alloc(
+        sz, std::unique_ptr<V8PFHandler>(new V8PFHandler()));
+    ebbrt::kbugon(pfn == ebbrt::Pfn::None(), "Page allocation failed\n");
+    size_ = size;
+    address_ = reinterpret_cast<void *>(pfn.ToAddr());
+  }
+#endif
+  // ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64
+  // "\n",
+  //                pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
 }
 
 v8::internal::VirtualMemory::VirtualMemory(size_t size, size_t alignment) {
-  auto sz = ebbrt::Pfn::Up(size).val();
-  auto align = ebbrt::Pfn::Up(alignment).val();
+#ifndef LARGE_PAGES
+  if (size <= max_phys_mem_allocation) {
+#endif
+    size_ = size;
+    address_ = memalign(alignment, size);
+#ifndef LARGE_PAGES
+  } else {
+    auto sz = ebbrt::Pfn::Up(size).val();
+    auto align = ebbrt::Pfn::Up(alignment).val();
 
-  auto pfn = ebbrt::vmem_allocator->Alloc(
-      sz, align, std::unique_ptr<V8PFHandler>(new V8PFHandler()));
-  ebbrt::kbugon(pfn == ebbrt::Pfn::None(), "Page allocation failed\n");
+    auto pfn = ebbrt::vmem_allocator->Alloc(
+                                            sz, align, std::unique_ptr<V8PFHandler>(new V8PFHandler()));
+    ebbrt::kbugon(pfn == ebbrt::Pfn::None(), "Page allocation failed\n");
 
-  size_ = size;
-  address_ = reinterpret_cast<void *>(pfn.ToAddr());
-  ebbrt::kbugon(pfn.ToAddr() % alignment != 0, "Alignment failure\n");
-  ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64 "\n",
-                 pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
+    size_ = size;
+    address_ = reinterpret_cast<void *>(pfn.ToAddr());
+    ebbrt::kbugon(pfn.ToAddr() % alignment != 0, "Alignment failure\n");
+  }
+#endif
+  // ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64
+  // "\n",
+  //                pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
 }
 
 v8::internal::VirtualMemory::~VirtualMemory() {
@@ -366,17 +410,18 @@ void *v8::internal::VirtualMemory::ReserveRegion(size_t size) {
 
 bool v8::internal::VirtualMemory::CommitRegion(void *base, size_t size,
                                                bool is_executable) {
-  auto addr = reinterpret_cast<uint64_t>(base);
-  ebbrt::kprintf("Committed virtual region %#018" PRIx64 " - %#018" PRIx64 "\n",
-                 addr, addr + size - 1);
+  // auto addr = reinterpret_cast<uint64_t>(base);
+  // ebbrt::kprintf("Committed virtual region %#018" PRIx64 " - %#018" PRIx64
+  // "\n",
+  //                addr, addr + size - 1);
   return true;
 }
 
 bool v8::internal::VirtualMemory::UncommitRegion(void *base, size_t size) {
-  auto addr = reinterpret_cast<uint64_t>(base);
-  ebbrt::kprintf("TODO(dschatz): Actually uncommit region %#018" PRIx64
-                 " - %#018" PRIx64 "\n",
-                 addr, addr + size - 1);
+  // auto addr = reinterpret_cast<uint64_t>(base);
+  // ebbrt::kprintf("TODO(dschatz): Actually uncommit region %#018" PRIx64
+  //                " - %#018" PRIx64 "\n",
+  //                addr, addr + size - 1);
   return true;
 }
 
