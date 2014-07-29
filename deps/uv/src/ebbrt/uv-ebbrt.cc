@@ -434,62 +434,100 @@ extern "C" int uv_fs_close(uv_loop_t *loop, uv_fs_t *req, uv_file file,
   return req->result;
 }
 
+extern const char __attribute__((weak)) node_script[];
+extern size_t __attribute__((weak)) node_script_len;
+
 extern "C" int uv_fs_open(uv_loop_t *loop, uv_fs_t *req, const char *path,
                           int flags, int mode, uv_fs_cb cb) {
-  FS_INIT(OPEN);
-  FS_PATH;
-  auto func = [req](ebbrt::Future<int> f) {
-    req->result = f.Get();
-    if (req->cb) {
-      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-          req->loop->callbacks);
-      cb_queue->emplace([req]() {
-        uv__req_unregister(req->loop, req);
-        req->cb(req);
-      });
-      activate_loop(req->loop);
-    } else {
-      uv__req_unregister(req->loop, req);
-    }
-    return req->result;
-  };
-  auto f = node_fs_ebb->Open(path, flags, mode);
-  if (cb) {
-    f.Then(std::move(func));
-    return 0;
+  if (node_script) {
+    EBBRT_UNIMPLEMENTED();
   } else {
-    return func(f.Block());
+    FS_INIT(OPEN);
+    FS_PATH;
+    auto func = [req](ebbrt::Future<int> f) {
+      req->result = f.Get();
+      if (req->cb) {
+        auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+            req->loop->callbacks);
+        cb_queue->emplace([req]() {
+          uv__req_unregister(req->loop, req);
+          req->cb(req);
+        });
+        activate_loop(req->loop);
+      } else {
+        uv__req_unregister(req->loop, req);
+      }
+      return req->result;
+    };
+    auto f = node_fs_ebb->Open(path, flags, mode);
+    if (cb) {
+      f.Then(std::move(func));
+      return 0;
+    } else {
+      return func(f.Block());
+    }
   }
+}
+
+namespace {
+size_t read_len = 0;
 }
 
 extern "C" int uv_fs_read(uv_loop_t *loop, uv_fs_t *req, uv_file fd, void *buf,
                           size_t length, int64_t offset, uv_fs_cb cb) {
   FS_INIT(READ);
-  auto func = [req, buf, cb](ebbrt::Future<std::string> f) {
-    auto &str = f.Get();
-    req->result = str.length();
-    memcpy(buf, str.data(), str.length());
-    if (req->cb) {
-      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-          req->loop->callbacks);
-      cb_queue->emplace([req]() {
-        uv__req_unregister(req->loop, req);
-        if (req->cb) {
-          req->cb(req);
-        }
-      });
-      activate_loop(req->loop);
-    } else {
+  if (node_script && fd == 0) {
+    if (!cb)
+      EBBRT_UNIMPLEMENTED();
+
+    if (offset != -1)
+      EBBRT_UNIMPLEMENTED();
+
+    auto cb_queue =
+        static_cast<std::queue<std::function<void()> > *>(loop->callbacks);
+    cb_queue->emplace([req, buf, length, cb]() {
+      auto script_len = node_script_len;
+      if (read_len < script_len) {
+        auto len = std::min(script_len - read_len, length);
+        std::strncpy(static_cast<char *>(buf), node_script + read_len, len);
+        read_len += len;
+        req->result = len;
+      } else {
+        req->result = 0;
+      }
+
       uv__req_unregister(req->loop, req);
-    }
-    return req->result;
-  };
-  auto f = node_fs_ebb->Read(fd, length, offset);
-  if (cb) {
-    f.Then(std::move(func));
+
+      cb(req);
+    });
     return 0;
   } else {
-    return func(f.Block());
+    auto func = [req, buf, cb](ebbrt::Future<std::string> f) {
+      auto &str = f.Get();
+      req->result = str.length();
+      memcpy(buf, str.data(), str.length());
+      if (req->cb) {
+        auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+            req->loop->callbacks);
+        cb_queue->emplace([req]() {
+          uv__req_unregister(req->loop, req);
+          if (req->cb) {
+            req->cb(req);
+          }
+        });
+        activate_loop(req->loop);
+      } else {
+        uv__req_unregister(req->loop, req);
+      }
+      return req->result;
+    };
+    auto f = node_fs_ebb->Read(fd, length, offset);
+    if (cb) {
+      f.Then(std::move(func));
+      return 0;
+    } else {
+      return func(f.Block());
+    }
   }
 }
 
@@ -559,121 +597,133 @@ extern "C" int uv_fs_fchown(uv_loop_t *loop, uv_fs_t *req, uv_file fd,
 
 extern "C" int uv_fs_stat(uv_loop_t *loop, uv_fs_t *req, const char *path,
                           uv_fs_cb cb) {
-  FS_INIT(STAT);
-  FS_PATH;
-  auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
-    auto &stat_info = f.Get();
-    req->result = 0;
-    req->statbuf.st_dev = stat_info.stat_dev;
-    req->statbuf.st_ino = stat_info.stat_ino;
-    req->statbuf.st_mode = stat_info.stat_mode;
-    req->statbuf.st_nlink = stat_info.stat_nlink;
-    req->statbuf.st_uid = stat_info.stat_uid;
-    req->statbuf.st_gid = stat_info.stat_gid;
-    req->statbuf.st_rdev = stat_info.stat_rdev;
-    req->statbuf.st_size = stat_info.stat_size;
-    req->statbuf.st_atime = stat_info.stat_atime;
-    req->statbuf.st_mtime = stat_info.stat_mtime;
-    req->statbuf.st_ctime = stat_info.stat_ctime;
-    req->ptr = &req->statbuf;
-    if (req->cb) {
-      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-          req->loop->callbacks);
-      cb_queue->emplace([req]() {
-        uv__req_unregister(req->loop, req);
-        req->cb(req);
-      });
-      activate_loop(req->loop);
-    } else {
-      uv__req_unregister(req->loop, req);
-    }
-  };
-  auto f = node_fs_ebb->Stat(path);
-  if (cb) {
-    f.Then(std::move(func));
+  if (node_script) {
+    EBBRT_UNIMPLEMENTED();
   } else {
-    func(f.Block());
+    FS_INIT(STAT);
+    FS_PATH;
+    auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
+      auto &stat_info = f.Get();
+      req->result = 0;
+      req->statbuf.st_dev = stat_info.stat_dev;
+      req->statbuf.st_ino = stat_info.stat_ino;
+      req->statbuf.st_mode = stat_info.stat_mode;
+      req->statbuf.st_nlink = stat_info.stat_nlink;
+      req->statbuf.st_uid = stat_info.stat_uid;
+      req->statbuf.st_gid = stat_info.stat_gid;
+      req->statbuf.st_rdev = stat_info.stat_rdev;
+      req->statbuf.st_size = stat_info.stat_size;
+      req->statbuf.st_atime = stat_info.stat_atime;
+      req->statbuf.st_mtime = stat_info.stat_mtime;
+      req->statbuf.st_ctime = stat_info.stat_ctime;
+      req->ptr = &req->statbuf;
+      if (req->cb) {
+        auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+            req->loop->callbacks);
+        cb_queue->emplace([req]() {
+          uv__req_unregister(req->loop, req);
+          req->cb(req);
+        });
+        activate_loop(req->loop);
+      } else {
+        uv__req_unregister(req->loop, req);
+      }
+    };
+    auto f = node_fs_ebb->Stat(path);
+    if (cb) {
+      f.Then(std::move(func));
+    } else {
+      func(f.Block());
+    }
+    return 0;
   }
-  return 0;
 }
 
 extern "C" int uv_fs_lstat(uv_loop_t *loop, uv_fs_t *req, const char *path,
                            uv_fs_cb cb) {
-  FS_INIT(LSTAT);
-  FS_PATH;
-  auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
-    auto &stat_info = f.Get();
-    req->result = 0;
-    req->statbuf.st_dev = stat_info.stat_dev;
-    req->statbuf.st_ino = stat_info.stat_ino;
-    req->statbuf.st_mode = stat_info.stat_mode;
-    req->statbuf.st_nlink = stat_info.stat_nlink;
-    req->statbuf.st_uid = stat_info.stat_uid;
-    req->statbuf.st_gid = stat_info.stat_gid;
-    req->statbuf.st_rdev = stat_info.stat_rdev;
-    req->statbuf.st_size = stat_info.stat_size;
-    req->statbuf.st_atime = stat_info.stat_atime;
-    req->statbuf.st_mtime = stat_info.stat_mtime;
-    req->statbuf.st_ctime = stat_info.stat_ctime;
-    req->ptr = &req->statbuf;
-    if (req->cb) {
-      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-          req->loop->callbacks);
-      cb_queue->emplace([req]() {
-        uv__req_unregister(req->loop, req);
-        req->cb(req);
-      });
-      activate_loop(req->loop);
-    } else {
-      uv__req_unregister(req->loop, req);
-    }
-  };
-  auto f = node_fs_ebb->LStat(path);
-  if (cb) {
-    f.Then(std::move(func));
+  if (node_script) {
+    EBBRT_UNIMPLEMENTED();
   } else {
-    func(f.Block());
+    FS_INIT(LSTAT);
+    FS_PATH;
+    auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
+      auto &stat_info = f.Get();
+      req->result = 0;
+      req->statbuf.st_dev = stat_info.stat_dev;
+      req->statbuf.st_ino = stat_info.stat_ino;
+      req->statbuf.st_mode = stat_info.stat_mode;
+      req->statbuf.st_nlink = stat_info.stat_nlink;
+      req->statbuf.st_uid = stat_info.stat_uid;
+      req->statbuf.st_gid = stat_info.stat_gid;
+      req->statbuf.st_rdev = stat_info.stat_rdev;
+      req->statbuf.st_size = stat_info.stat_size;
+      req->statbuf.st_atime = stat_info.stat_atime;
+      req->statbuf.st_mtime = stat_info.stat_mtime;
+      req->statbuf.st_ctime = stat_info.stat_ctime;
+      req->ptr = &req->statbuf;
+      if (req->cb) {
+        auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+            req->loop->callbacks);
+        cb_queue->emplace([req]() {
+          uv__req_unregister(req->loop, req);
+          req->cb(req);
+        });
+        activate_loop(req->loop);
+      } else {
+        uv__req_unregister(req->loop, req);
+      }
+    };
+    auto f = node_fs_ebb->LStat(path);
+    if (cb) {
+      f.Then(std::move(func));
+    } else {
+      func(f.Block());
+    }
+    return 0;
   }
-  return 0;
 }
 
 extern "C" int uv_fs_fstat(uv_loop_t *loop, uv_fs_t *req, uv_file fd,
                            uv_fs_cb cb) {
-  FS_INIT(FSTAT);
-  auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
-    auto &stat_info = f.Get();
-    req->result = 0;
-    req->statbuf.st_dev = stat_info.stat_dev;
-    req->statbuf.st_ino = stat_info.stat_ino;
-    req->statbuf.st_mode = stat_info.stat_mode;
-    req->statbuf.st_nlink = stat_info.stat_nlink;
-    req->statbuf.st_uid = stat_info.stat_uid;
-    req->statbuf.st_gid = stat_info.stat_gid;
-    req->statbuf.st_rdev = stat_info.stat_rdev;
-    req->statbuf.st_size = stat_info.stat_size;
-    req->statbuf.st_atime = stat_info.stat_atime;
-    req->statbuf.st_mtime = stat_info.stat_mtime;
-    req->statbuf.st_ctime = stat_info.stat_ctime;
-    req->ptr = &req->statbuf;
-    if (req->cb) {
-      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-          req->loop->callbacks);
-      cb_queue->emplace([req]() {
-        uv__req_unregister(req->loop, req);
-        req->cb(req);
-      });
-      activate_loop(req->loop);
-    } else {
-      uv__req_unregister(req->loop, req);
-    }
-  };
-  auto f = node_fs_ebb->FStat(fd);
-  if (cb) {
-    f.Then(std::move(func));
+  if (node_script) {
+    EBBRT_UNIMPLEMENTED();
   } else {
-    func(f.Block());
+    FS_INIT(FSTAT);
+    auto func = [req](ebbrt::Future<FileSystem::StatInfo> f) {
+      auto &stat_info = f.Get();
+      req->result = 0;
+      req->statbuf.st_dev = stat_info.stat_dev;
+      req->statbuf.st_ino = stat_info.stat_ino;
+      req->statbuf.st_mode = stat_info.stat_mode;
+      req->statbuf.st_nlink = stat_info.stat_nlink;
+      req->statbuf.st_uid = stat_info.stat_uid;
+      req->statbuf.st_gid = stat_info.stat_gid;
+      req->statbuf.st_rdev = stat_info.stat_rdev;
+      req->statbuf.st_size = stat_info.stat_size;
+      req->statbuf.st_atime = stat_info.stat_atime;
+      req->statbuf.st_mtime = stat_info.stat_mtime;
+      req->statbuf.st_ctime = stat_info.stat_ctime;
+      req->ptr = &req->statbuf;
+      if (req->cb) {
+        auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+            req->loop->callbacks);
+        cb_queue->emplace([req]() {
+          uv__req_unregister(req->loop, req);
+          req->cb(req);
+        });
+        activate_loop(req->loop);
+      } else {
+        uv__req_unregister(req->loop, req);
+      }
+    };
+    auto f = node_fs_ebb->FStat(fd);
+    if (cb) {
+      f.Then(std::move(func));
+    } else {
+      func(f.Block());
+    }
+    return 0;
   }
-  return 0;
 }
 
 extern "C" int uv_fs_rename(uv_loop_t *loop, uv_fs_t *req, const char *path,
@@ -858,13 +908,23 @@ extern "C" uv_err_t uv_cwd(char *buffer, size_t size) {
     return uv__new_artificial_error(UV_EINVAL);
   }
 
-  auto f = node_fs_ebb->GetCwd().Block();
-  auto &str = f.Get();
-  if (size < str.size())
-    return uv__new_sys_error(ERANGE);
-  strncpy(buffer, str.data(), size);
+  if (node_script) {
+    if (size < 2)
+      return uv__new_sys_error(ERANGE);
 
-  return uv_ok_;
+    buffer[0] = '/';
+    buffer[1] = '\0';
+
+    return uv_ok_;
+  } else {
+    auto f = node_fs_ebb->GetCwd().Block();
+    auto &str = f.Get();
+    if (size < str.size())
+      return uv__new_sys_error(ERANGE);
+    strncpy(buffer, str.data(), size);
+
+    return uv_ok_;
+  }
 }
 
 extern "C" uv_err_t uv_chdir(const char *dir) { EBBRT_UNIMPLEMENTED(); }
