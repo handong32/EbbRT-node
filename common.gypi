@@ -169,7 +169,7 @@
         ],
       }],
       [ 'OS=="ebbrt"', {
-        'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter', '-I ~/Work/SESA/EbbRT/baremetal/src/include', '-I ~/Work/SESA/EbbRT/common/src/include', '-I ~/Work/SESA/EbbRT/baremetal/ext/boost/include', '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include'],
+        'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter', '-I ${EBBRT_SRCDIR}/baremetal/src/include', '-I ${EBBRT_SRCDIR}/common/src/include', '-I ${EBBRT_SRCDIR}/baremetal/ext/boost/include', '-I ${EBBRT_SRCDIR}/baremetal/ext/lwip/include'],
         #'cflags_cc': [ '-fno-rtti', '-fno-exceptions' ],
         'target_conditions': [
           ['_type=="static_library"', {

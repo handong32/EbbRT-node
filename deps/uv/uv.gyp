@@ -121,10 +121,12 @@
         }],
         [ 'OS=="ebbrt"', {
           'cflags': [
-            '-I ~/Work/SESA/EbbRT/baremetal/src/include',
-            '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include',
-            '-I ~/Work/SESA/EbbRT/baremetal/ext/lwip/include/ipv4',
-            '-I ~/Work/SESA/EbbRT/baremetal/ext/tbb/include',
+            '-I ${EBBRT_SRCDIR}/baremetal/src/include',
+            '-I ${EBBRT_SRCDIR}/baremetal/ext/lwip/include',
+            '-I ${EBBRT_SRCDIR}/baremetal/ext/lwip/include/ipv4',
+            '-I ${EBBRT_SRCDIR}/baremetal/ext/tbb/include',
+	    '-I ${EBBRT_SRCDIR}/common/src/include',
+	    '-I ${EBBRT_SRCDIR}/baremetal/ext/boost/include',
             '-g',
             '-Wall',
             '-Wextra',
