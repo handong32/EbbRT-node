@@ -549,7 +549,7 @@ extern "C" int uv_fs_write(uv_loop_t *loop, uv_fs_t *req, uv_file fd, void *buf,
   if (cb)
     EBBRT_UNIMPLEMENTED();
 
-  ebbrt::kprintf("%.*s", length, static_cast<const char *>(buf));
+  ebbrt::force_kprintf("%.*s", length, static_cast<const char *>(buf));
   uv__req_unregister(req->loop, req);
 
   return 0;
