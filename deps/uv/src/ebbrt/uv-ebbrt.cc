@@ -245,12 +245,16 @@ int uv__loop_init(uv_loop_t *loop) {
   ngx_queue_init(&loop->handle_queue);
   ngx_queue_init(&loop->active_reqs);
   ngx_queue_init(&loop->idle_handles);
+#if __EXCEPTIONS
   try {
+#endif
     loop->callbacks = new std::queue<std::function<void()> >();
+#if __EXCEPTIONS
   }
   catch (...) {
     return -1;
   }
+#endif
   uv__update_time(loop);
 
   return 0;
