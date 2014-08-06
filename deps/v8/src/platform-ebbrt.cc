@@ -222,7 +222,11 @@ class EbbRTSemaphore : public v8::internal::Semaphore {
 
   bool Wait(int timeout) override { EBBRT_UNIMPLEMENTED(); }
 
+#ifdef __JA_V8_PROFILE_HACK__
+  void Signal() override { return; }
+#else
   void Signal() override { EBBRT_UNIMPLEMENTED(); }
+#endif
 };
 }
 
@@ -276,7 +280,11 @@ void v8::internal::OS::StrNCpy(Vector<char> dest, const char *src, size_t n) {
   EBBRT_UNIMPLEMENTED();
 }
 
+#ifdef __JA_V8_PROFILE_HACK__
+void v8::internal::OS::LogSharedLibraryAddresses() { return; }
+#else
 void v8::internal::OS::LogSharedLibraryAddresses() { EBBRT_UNIMPLEMENTED(); }
+#endif
 
 void v8::internal::OS::SignalCodeMovingGC() { EBBRT_UNIMPLEMENTED(); }
 
@@ -446,7 +454,11 @@ void v8::internal::Thread::set_name(const char *name) {
   name_[sizeof(name_) - 1] = '\0';
 }
 
+#ifdef __JA_V8_PROFILE_HACK__
+void v8::internal::Thread::Join() { return; }
+#else
 void v8::internal::Thread::Join() { EBBRT_UNIMPLEMENTED(); }
+#endif
 
 namespace {
 std::mutex key_map_mut;
