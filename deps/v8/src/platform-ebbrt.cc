@@ -53,7 +53,13 @@ UNARY_MATH_FUNCTION(sqrt, v8::internal::CreateSqrtFunction())
 
 #undef MATH_FUNCTION
 
-void v8::internal::OS::SetUp() {}
+namespace {
+  v8::internal::Mutex* limit_mutex;
+}
+
+void v8::internal::OS::SetUp() {
+  limit_mutex = CreateMutex();
+}
 
 void v8::internal::OS::PostSetUp() {
   init_fast_sin_function();
@@ -63,7 +69,9 @@ void v8::internal::OS::PostSetUp() {
   init_fast_sqrt_function();
 }
 
-void v8::internal::OS::TearDown() {}
+void v8::internal::OS::TearDown() {
+  delete limit_mutex;
+}
 
 int v8::internal::OS::GetUserTime(uint32_t *secs, uint32_t *usecs) {
   EBBRT_UNIMPLEMENTED();
@@ -158,12 +166,28 @@ void v8::internal::OS::VPrintError(const char *format, va_list args) {
   EBBRT_UNIMPLEMENTED();
 }
 
+namespace {
+  uintptr_t lowest_ever_allocated = UINTPTR_MAX;
+  uintptr_t highest_ever_allocated = 0;
+
+  void UpdateAllocatedSpaceLimits(void* address, int size) {
+    ASSERT(limit_mutex != NULL);
+    v8::internal::ScopedLock lock(limit_mutex);
+
+    auto addr = reinterpret_cast<uintptr_t>(address);
+
+    lowest_ever_allocated = v8::internal::Min(lowest_ever_allocated, addr);
+    highest_ever_allocated = v8::internal::Max(highest_ever_allocated, addr + size);
+  }
+}
+
 void *v8::internal::OS::Allocate(const size_t requested, size_t *allocated,
                                  bool is_executable) {
   const size_t msize = RoundUp(requested, AllocateAlignment());
   auto mbase = malloc(msize);
 
   *allocated = msize;
+  UpdateAllocatedSpaceLimits(mbase, msize);
   return mbase;
 }
 
@@ -186,7 +210,10 @@ void *v8::internal::OS::GetRandomMmapAddr() {
 
 size_t v8::internal::OS::AllocateAlignment() { return 8; }
 
-bool v8::internal::OS::IsOutsideAllocatedSpace(void *pointer) { return false; }
+bool v8::internal::OS::IsOutsideAllocatedSpace(void *pointer) { 
+  auto addr = reinterpret_cast<uintptr_t>(pointer);
+  return addr < lowest_ever_allocated || addr >= highest_ever_allocated;
+}
 
 void v8::internal::OS::Sleep(const int milliseconds) { EBBRT_UNIMPLEMENTED(); }
 
@@ -357,6 +384,7 @@ v8::internal::VirtualMemory::VirtualMemory(size_t size) {
     address_ = reinterpret_cast<void *>(pfn.ToAddr());
   }
 #endif
+  UpdateAllocatedSpaceLimits(address_, size_);
   // ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64
   // "\n",
   //                pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
@@ -382,6 +410,7 @@ v8::internal::VirtualMemory::VirtualMemory(size_t size, size_t alignment) {
     ebbrt::kbugon(pfn.ToAddr() % alignment != 0, "Alignment failure\n");
   }
 #endif
+  UpdateAllocatedSpaceLimits(address_, size_);
   // ebbrt::kprintf("Allocated virtual region %#018" PRIx64 " - %#018" PRIx64
   // "\n",
   //                pfn.ToAddr(), pfn.ToAddr() + size_ - 1);
