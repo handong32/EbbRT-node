@@ -9,6 +9,7 @@
 #include <ebbrt/Clock.h>
 #include <ebbrt/Debug.h>
 #include <ebbrt/Net.h>
+#include <ebbrt/NetMisc.h>
 #include <ebbrt/Timer.h>
 
 #include "../../../../FileSystem.h"
@@ -101,7 +102,7 @@ void activate_loop(uv_loop_t *loop) {
     auto context =
         static_cast<ebbrt::EventManager::EventContext *>(loop->event_context);
     loop->event_context = nullptr;
-    ebbrt::event_manager->ActivateContextSync(std::move(*context));
+    ebbrt::event_manager->ActivateContext(std::move(*context));
   }
 }
 
@@ -143,91 +144,93 @@ void uv_tcp_enqueue_read(uv_tcp_t *handle) {
 }
 
 int uv_tcp_listen(uv_tcp_t *handle, int backlog, uv_connection_cb cb) {
-  auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
-  pcb->ListenWithBacklog(backlog);
-  pcb->Accept([cb, handle](ebbrt::NetworkManager::TcpPcb pcb) {
-    tcp_accept_ctr.Enter();
-    auto t = new uv_tcp_t;
-    auto tcp_pcb = new ebbrt::NetworkManager::TcpPcb(std::move(pcb));
-    t->tcp_pcb = tcp_pcb;
-    t->buf = new std::unique_ptr<ebbrt::IOBuf>();
-    tcp_pcb->Receive([t](ebbrt::NetworkManager::TcpPcb &pcb,
-                         std::unique_ptr<ebbrt::IOBuf> &&buf) {
-      tcp_prereceive_ctr.Enter();
-      if (buf->ComputeChainDataLength() <= 0)
-        EBBRT_UNIMPLEMENTED();
+  EBBRT_UNIMPLEMENTED();
+  // auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
+  // pcb->ListenWithBacklog(backlog);
+  // pcb->Accept([cb, handle](ebbrt::NetworkManager::TcpPcb pcb) {
+  //   tcp_accept_ctr.Enter();
+  //   auto t = new uv_tcp_t;
+  //   auto tcp_pcb = new ebbrt::NetworkManager::TcpPcb(std::move(pcb));
+  //   t->tcp_pcb = tcp_pcb;
+  //   t->buf = new std::unique_ptr<ebbrt::IOBuf>();
+  //   tcp_pcb->Receive([t](ebbrt::NetworkManager::TcpPcb &pcb,
+  //                        std::unique_ptr<ebbrt::IOBuf> &&buf) {
+  //     tcp_prereceive_ctr.Enter();
+  //     if (buf->ComputeChainDataLength() <= 0)
+  //       EBBRT_UNIMPLEMENTED();
 
-      auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(t->buf);
-      if (b) {
-        b->Prev()->AppendChain(std::move(buf));
-      } else {
-        b = std::move(buf);
-      }
-      tcp_prereceive_ctr.Exit();
-    });
+  //     auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(t->buf);
+  //     if (b) {
+  //       b->Prev()->AppendChain(std::move(buf));
+  //     } else {
+  //       b = std::move(buf);
+  //     }
+  //     tcp_prereceive_ctr.Exit();
+  //   });
 
-    auto accept_queue =
-        static_cast<std::queue<uv_tcp_t *> *>(handle->accepted_queue);
-    accept_queue->push(std::move(t));
+  //   auto accept_queue =
+  //       static_cast<std::queue<uv_tcp_t *> *>(handle->accepted_queue);
+  //   accept_queue->push(std::move(t));
 
-    auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-        handle->loop->callbacks);
+  //   auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+  //       handle->loop->callbacks);
 
-    cb_queue->emplace([handle, cb]() { cb((uv_stream_t *)handle, 0); });
-    activate_loop(handle->loop);
-    tcp_accept_ctr.Exit();
-  });
-  return 0;
+  //   cb_queue->emplace([handle, cb]() { cb((uv_stream_t *)handle, 0); });
+  //   activate_loop(handle->loop);
+  //   tcp_accept_ctr.Exit();
+  // });
+  // return 0;
 }
 
 int uv_tcp_accept(uv_tcp_t *server, uv_tcp_t *client) {
-  auto accept_queue =
-      static_cast<std::queue<uv_tcp_t *> *>(server->accepted_queue);
-  auto uv_tcp = accept_queue->front();
-  client->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
-  // delete the previously allocated bufs
-  delete static_cast<ebbrt::NetworkManager::TcpPcb *>(client->tcp_pcb);
-  delete static_cast<std::unique_ptr<ebbrt::IOBuf> *>(client->buf);
-  client->tcp_pcb = uv_tcp->tcp_pcb;
-  client->buf = uv_tcp->buf;
-  accept_queue->pop();
-  auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(client->tcp_pcb);
-  pcb->Receive([client](ebbrt::NetworkManager::TcpPcb &pcb,
-                        std::unique_ptr<ebbrt::IOBuf> &&buf) {
-    if (likely(!(client->flags & UV_CLOSING || client->flags & UV_CLOSED))) {
-      if (unlikely(buf->ComputeChainDataLength() <= 0)) {
-        if (!(client->flags & UV_STREAM_READING))
-          EBBRT_UNIMPLEMENTED();
-        auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-            client->loop->callbacks);
+  EBBRT_UNIMPLEMENTED();
+  // auto accept_queue =
+  //     static_cast<std::queue<uv_tcp_t *> *>(server->accepted_queue);
+  // auto uv_tcp = accept_queue->front();
+  // client->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
+  // // delete the previously allocated bufs
+  // delete static_cast<ebbrt::NetworkManager::TcpPcb *>(client->tcp_pcb);
+  // delete static_cast<std::unique_ptr<ebbrt::IOBuf> *>(client->buf);
+  // client->tcp_pcb = uv_tcp->tcp_pcb;
+  // client->buf = uv_tcp->buf;
+  // accept_queue->pop();
+  // auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(client->tcp_pcb);
+  // pcb->Receive([client](ebbrt::NetworkManager::TcpPcb &pcb,
+  //                       std::unique_ptr<ebbrt::IOBuf> &&buf) {
+  //   if (likely(!(client->flags & UV_CLOSING || client->flags & UV_CLOSED))) {
+  //     if (unlikely(buf->ComputeChainDataLength() <= 0)) {
+  //       if (!(client->flags & UV_STREAM_READING))
+  //         EBBRT_UNIMPLEMENTED();
+  //       auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+  //           client->loop->callbacks);
 
-        cb_queue->emplace([client]() {
-          auto uv_buf = client->alloc_cb((uv_handle_t *)client, 8);
-          assert(uv_buf.len > 0);
-          assert(uv_buf.base);
-          uv__set_artificial_error(client->loop, UV_EOF);
-          client->read_cb((uv_stream_t *)client, -1, uv_buf);
-        });
-        activate_loop(client->loop);
-      } else {
-        auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(client->buf);
-        if (b) {
-          b->Prev()->AppendChain(std::move(buf));
-        } else {
-          b = std::move(buf);
-        }
+  //       cb_queue->emplace([client]() {
+  //         auto uv_buf = client->alloc_cb((uv_handle_t *)client, 8);
+  //         assert(uv_buf.len > 0);
+  //         assert(uv_buf.base);
+  //         uv__set_artificial_error(client->loop, UV_EOF);
+  //         client->read_cb((uv_stream_t *)client, -1, uv_buf);
+  //       });
+  //       activate_loop(client->loop);
+  //     } else {
+  //       auto &b = *static_cast<std::unique_ptr<ebbrt::IOBuf> *>(client->buf);
+  //       if (b) {
+  //         b->Prev()->AppendChain(std::move(buf));
+  //       } else {
+  //         b = std::move(buf);
+  //       }
 
-        if (client->flags & UV_STREAM_READING) {
-          uv_tcp_enqueue_read(client);
-          activate_loop(client->loop);
-        }
-      }
-    }
-  });
+  //       if (client->flags & UV_STREAM_READING) {
+  //         uv_tcp_enqueue_read(client);
+  //         activate_loop(client->loop);
+  //       }
+  //     }
+  //   }
+  // });
 
-  delete uv_tcp;
+  // delete uv_tcp;
 
-  return 0;
+  // return 0;
 }
 
 int uv_pipe_listen(uv_pipe_t *handle, int backlog, uv_connection_cb cb) {
@@ -1131,41 +1134,42 @@ extern "C" int uv_write(uv_write_t *req, uv_stream_t *handle, uv_buf_t bufs[],
 
   switch (handle->type) {
   case UV_TCP: {
-    tcp_write_ctr.Enter();
-    assert(bufcnt > 0);
-    auto b = ebbrt::IOBuf::TakeOwnership(bufs[0].base, bufs[0].len);
-    for (int i = 1; i < bufcnt; ++i) {
-      b->Prev()->AppendChain(
-          ebbrt::IOBuf::TakeOwnership(bufs[i].base, bufs[i].len));
-    }
-    auto tcp_stream = (uv_tcp_t *)handle;
-    auto pcb =
-        static_cast<ebbrt::NetworkManager::TcpPcb *>(tcp_stream->tcp_pcb);
-    handle->pending_writes++;
-    pcb->Send(std::move(b)).Then([req, handle, cb](ebbrt::Future<void> f) {
-      f.Get();
-      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-          handle->loop->callbacks);
-      cb_queue->emplace([handle, req, cb]() {
-        uv__req_unregister(handle->loop, req);
-        tcp_write_cb_ctr.Enter();
-        if (handle->flags & UV_CLOSING) {
-          cb(req, UV_ECANCELED);
-        } else {
-          cb(req, 0);
-        }
-        tcp_write_cb_ctr.Exit();
-        handle->pending_writes--;
-        if (handle->flags & UV_STREAM_SHUTTING) {
-          check_shutdown(handle);
-        }
-      });
-      activate_loop(handle->loop);
-    });
-    // tcp_output_ctr.Enter();
-    // pcb->Output();
-    // tcp_output_ctr.Exit();
-    tcp_write_ctr.Exit();
+    EBBRT_UNIMPLEMENTED();
+    // tcp_write_ctr.Enter();
+    // assert(bufcnt > 0);
+    // auto b = ebbrt::IOBuf::TakeOwnership(bufs[0].base, bufs[0].len);
+    // for (int i = 1; i < bufcnt; ++i) {
+    //   b->Prev()->AppendChain(
+    //       ebbrt::IOBuf::TakeOwnership(bufs[i].base, bufs[i].len));
+    // }
+    // auto tcp_stream = (uv_tcp_t *)handle;
+    // auto pcb =
+    //     static_cast<ebbrt::NetworkManager::TcpPcb *>(tcp_stream->tcp_pcb);
+    // handle->pending_writes++;
+    // pcb->Send(std::move(b)).Then([req, handle, cb](ebbrt::Future<void> f) {
+    //   f.Get();
+    //   auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+    //       handle->loop->callbacks);
+    //   cb_queue->emplace([handle, req, cb]() {
+    //     uv__req_unregister(handle->loop, req);
+    //     tcp_write_cb_ctr.Enter();
+    //     if (handle->flags & UV_CLOSING) {
+    //       cb(req, UV_ECANCELED);
+    //     } else {
+    //       cb(req, 0);
+    //     }
+    //     tcp_write_cb_ctr.Exit();
+    //     handle->pending_writes--;
+    //     if (handle->flags & UV_STREAM_SHUTTING) {
+    //       check_shutdown(handle);
+    //     }
+    //   });
+    //   activate_loop(handle->loop);
+    // });
+    // // tcp_output_ctr.Enter();
+    // // pcb->Output();
+    // // tcp_output_ctr.Exit();
+    // tcp_write_ctr.Exit();
     break;
   }
   default:
@@ -1211,17 +1215,18 @@ extern "C" int uv_timer_start(uv_timer_t *handle, uv_timer_cb cb,
   if (repeat > 0)
     EBBRT_UNIMPLEMENTED();
 
-  ebbrt::timer->Start(timeout_ms,
-                      [handle, cb]() {
-                        auto cb_queue =
-                            static_cast<std::queue<std::function<void()> > *>(
-                                handle->loop->callbacks);
-                        cb_queue->emplace([handle, cb]() {
-                          uv_timer_stop(handle);
-                          cb(handle, 0);
-                        });
-                      },
-                      /* repeat = */ false);
+  EBBRT_UNIMPLEMENTED();
+  // ebbrt::timer->Start(timeout_ms,
+  //                     [handle, cb]() {
+  //                       auto cb_queue =
+  //                           static_cast<std::queue<std::function<void()> > *>(
+  //                               handle->loop->callbacks);
+  //                       cb_queue->emplace([handle, cb]() {
+  //                         uv_timer_stop(handle);
+  //                         cb(handle, 0);
+  //                       });
+  //                     },
+  //                     /* repeat = */ false);
 
   return 0;
 }
@@ -1449,14 +1454,15 @@ extern "C" in_addr_t inet_addr(const char *cp) {
 }
 
 extern "C" int uv__tcp_bind(uv_tcp_t *handle, struct sockaddr_in addr) {
-  if (!(addr.sin_addr.s_addr == 0 ||
-        addr.sin_addr.s_addr == inet_addr("127.0.0.1")))
-    EBBRT_UNIMPLEMENTED();
+  EBBRT_UNIMPLEMENTED();
+  // if (!(addr.sin_addr.s_addr == 0 ||
+  //       addr.sin_addr.s_addr == inet_addr("127.0.0.1")))
+  //   EBBRT_UNIMPLEMENTED();
 
-  handle->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
+  // handle->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
 
-  auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
-  pcb->Bind(ntohs(addr.sin_port));
+  // auto pcb = static_cast<ebbrt::NetworkManager::TcpPcb *>(handle->tcp_pcb);
+  // pcb->Bind(ntohs(addr.sin_port));
   return 0;
 }
 
