@@ -3,9 +3,18 @@
 
 #include "ngx-queue.h"
 
-#include <lwip/def.h>
-
 typedef uint32_t socklen_t;
+
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+inline uint32_t htonl(uint32_t data) { return __builtin_bswap32(data); }
+inline uint16_t htons(uint16_t data) { return __builtin_bswap16(data); }
+#else
+inline uint32_t htonl(uint32_t data) { return data; }
+inline uint16_t htons(uint16_t data) { return data; }
+#endif
+
+inline uint32_t ntohl(uint32_t data) { return htonl(data); }
+inline uint16_t ntohs(uint16_t data) { return htons(data); }
 
 struct addrinfo {
   int ai_flags;
