@@ -192,7 +192,7 @@ void *v8::internal::OS::Allocate(const size_t requested, size_t *allocated,
 }
 
 void v8::internal::OS::Free(void *address, const size_t size) {
-  delete[] static_cast<uint8_t *>(address);
+  free(address);
 }
 
 intptr_t v8::internal::OS::CommitPageSize() { return ebbrt::pmem::kPageSize; }
