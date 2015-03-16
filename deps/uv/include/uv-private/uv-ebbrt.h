@@ -168,9 +168,10 @@ typedef struct {
 #define UV_WRITE_PRIVATE_FIELDS /* empty */
 
 #define UV_TCP_PRIVATE_FIELDS                                                  \
+  uint16_t bind_port;                                                          \
   void *tcp_pcb;                                                               \
-  void *accepted_queue;                                                        \
-  void *buf;
+  void *handler;                                                               \
+  void *accepted_queue;
 
 #define UV_CONNECT_PRIVATE_FIELDS /* empty */
 
