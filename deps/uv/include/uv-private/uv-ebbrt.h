@@ -196,7 +196,18 @@ typedef struct {
 
 #define UV_ASYNC_PRIVATE_FIELDS /* empty */
 
-#define UV_TIMER_PRIVATE_FIELDS /* empty */
+#define UV_TIMER_PRIVATE_FIELDS                                                \
+  /* RB_ENTRY(uv_timer_s) tree_entry; */                                       \
+  struct {                                                                     \
+    struct uv_timer_s *rbe_left;                                               \
+    struct uv_timer_s *rbe_right;                                              \
+    struct uv_timer_s *rbe_parent;                                             \
+    int rbe_color;                                                             \
+  } tree_entry;                                                                \
+  uv_timer_cb timer_cb;                                                        \
+  uint64_t timeout;                                                            \
+  uint64_t repeat;                                                             \
+  uint64_t start_id;
 
 #define UV_GETADDRINFO_PRIVATE_FIELDS                                          \
   uv_getaddrinfo_cb cb;                                                        \
@@ -213,12 +224,19 @@ typedef struct {
 
 #define UV_SIGNAL_PRIVATE_FIELDS /* empty */
 
+struct uv__timers {
+  struct uv_timer_s *rbh_root;
+};
+
 #define UV_LOOP_PRIVATE_FIELDS                                                 \
+  /* RB_head(uv__timers, uv_timer_s) */                                        \
+  struct uv__timers timer_handles;                                             \
   uint64_t time;                                                               \
   ngx_queue_t idle_handles;                                                    \
   void *event_context;                                                         \
   void *callbacks;                                                             \
-  int blocking;
+  int blocking;                                                                \
+  uint64_t timer_counter;
 
 #define UV_DYNAMIC /* empty */
 
