@@ -282,6 +282,7 @@ int uv_tcp_accept(uv_tcp_t *server, uv_tcp_t *client) {
   auto accept_queue =
       static_cast<std::queue<UVTcpHandler *> *>(server->accepted_queue);
   kassert(accept_queue);
+  kassert(!accept_queue->empty());
   auto handler = accept_queue->front();
   client->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
   client->handler = handler;
@@ -343,6 +344,8 @@ void uv__update_time(uv_loop_t *loop) {
 }
 
 int uv__loop_init(uv_loop_t *loop) {
+  memset(loop, 0, sizeof(*loop));
+  RB_INIT(&loop->timer_handles);
   ngx_queue_init(&loop->handle_queue);
   ngx_queue_init(&loop->active_reqs);
   ngx_queue_init(&loop->idle_handles);
@@ -932,10 +935,12 @@ void uv__tcp_close(uv_tcp_t *handle, uv_close_cb cb) {
   auto pcb =
       static_cast<ebbrt::NetworkManager::ListeningTcpPcb *>(handle->tcp_pcb);
   delete pcb;
-  auto handler = static_cast<UVTcpHandler *>(handle->handler);
-  delete handler;
   handle->flags &= ~UV_CLOSING;
   handle->flags |= UV_CLOSED;
+
+  uv__handle_unref(handle);
+  ngx_queue_remove(&handle->handle_queue);
+
   auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
       handle->loop->callbacks);
 
