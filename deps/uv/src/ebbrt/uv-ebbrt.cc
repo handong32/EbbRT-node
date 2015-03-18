@@ -103,7 +103,7 @@ void activate_loop(uv_loop_t *loop) {
     auto context =
         static_cast<ebbrt::EventManager::EventContext *>(loop->event_context);
     loop->event_context = nullptr;
-    ebbrt::event_manager->ActivateContext(std::move(*context));
+    ebbrt::event_manager->ActivateContextSync(std::move(*context));
   }
 }
 
@@ -130,19 +130,21 @@ public:
   }
 
   void Close() override {
-    if (!(client_->flags & UV_STREAM_READING))
-      EBBRT_UNIMPLEMENTED();
-    auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
-        client_->loop->callbacks);
+    if (client_) {
+      if (!(client_->flags & UV_STREAM_READING))
+        EBBRT_UNIMPLEMENTED();
+      auto cb_queue = static_cast<std::queue<std::function<void()> > *>(
+          client_->loop->callbacks);
 
-    cb_queue->emplace([this]() {
-      auto uv_buf = client_->alloc_cb((uv_handle_t *)client_, 8);
-      assert(uv_buf.len > 0);
-      assert(uv_buf.base);
-      uv__set_artificial_error(client_->loop, UV_EOF);
-      client_->read_cb((uv_stream_t *)client_, -1, uv_buf);
-    });
-    activate_loop(client_->loop);
+      cb_queue->emplace([this]() {
+        auto uv_buf = client_->alloc_cb((uv_handle_t *)client_, 8);
+        assert(uv_buf.len > 0);
+        assert(uv_buf.base);
+        uv__set_artificial_error(client_->loop, UV_EOF);
+        client_->read_cb((uv_stream_t *)client_, -1, uv_buf);
+      });
+      activate_loop(client_->loop);
+    }
     Shutdown();
   }
   void Abort() override {}
@@ -935,6 +937,9 @@ void uv__tcp_close(uv_tcp_t *handle, uv_close_cb cb) {
   auto pcb =
       static_cast<ebbrt::NetworkManager::ListeningTcpPcb *>(handle->tcp_pcb);
   delete pcb;
+  auto handler = static_cast<UVTcpHandler *>(handle->handler);
+  if (handler)
+    handler->client_ = nullptr;
   handle->flags &= ~UV_CLOSING;
   handle->flags |= UV_CLOSED;
 
@@ -1252,7 +1257,7 @@ extern "C" int uv_write(uv_write_t *req, uv_stream_t *handle, uv_buf_t bufs[],
     }
 
     auto tcp_stream = (uv_tcp_t *)handle;
-    auto handler = static_cast<UVTcpHandler*>(tcp_stream->handler);
+    auto handler = static_cast<UVTcpHandler *>(tcp_stream->handler);
     handle->pending_writes++;
     handler->Send(std::move(b));
     handler->Pcb().Output();
