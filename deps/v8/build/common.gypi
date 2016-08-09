@@ -362,7 +362,7 @@
           ['OS=="ebbrt"', {
             'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
                         '-Wnon-virtual-dtor', '-Woverloaded-virtual', '-Wno-unused-local-typedefs', '-U ebbrt',],
-            'cflags_cc': [ '-std=gnu++11' ],
+            'cflags_cc': [ '-std=gnu++14' ],
           }],
           ['OS=="android"', {
             'variables': {
@@ -395,7 +395,7 @@
           }],
           ['OS=="ebbrt"', {
             'cflags': [ '-U ebbrt', '-Wno-unused-local-typedefs' ],
-            'cflags_cc': [ '-std=gnu++11' ],
+            'cflags_cc': [ '-std=gnu++14' ],
           }],
           ['OS=="mac"', {
             'xcode_settings': {

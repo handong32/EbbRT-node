@@ -2344,7 +2344,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
     process->Set(String::NewSymbol("traceDeprecation"), True());
   }
 
-#ifdef __ebbrt
+#ifdef __ebbrt__
   size_t size = 8192;
 #else
   size_t size = 2 * PATH_MAX;

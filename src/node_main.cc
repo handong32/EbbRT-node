@@ -59,6 +59,46 @@ int wmain(int argc, wchar_t *wargv[]) {
   // Now that conversion is done, we can finally start.
   return node::Start(argc, argv);
 }
+#elif __ebbrt__
+#include <ebbrt/Acpi.h>
+#include <ebbrt/Debug.h>
+#include <ebbrt/StaticIds.h>
+
+#include <ebbrt-filesystem/FileSystem.h>
+#include <ebbrt-cmdline/CmdLineArgs.h>
+
+enum : ebbrt::EbbId {
+  kCmdLineArgsId = ebbrt::kFirstStaticUserId,
+  kFileSystemId
+};
+
+ebbrt::EbbRef<FileSystem> node_fs_ebb;
+
+void AppMain() {
+    putenv(const_cast<char *>("TZ=EST5EDT4,M3.2.0,M11.1.0"));
+#ifndef BM_ONLY
+    node_fs_ebb =
+        FileSystem::Create(&FileSystem::CreateRep(kFileSystemId), kFileSystemId);
+    auto cmdlineargs = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
+    auto cmd_argc = cmdlineargs->argc();
+    auto cmd_argv = cmdlineargs->argv();
+    auto i = node::Start(cmd_argc, cmd_argv);
+#else
+    int argc = 0;
+#ifndef __JA_V8_PROFILE_HACK__
+    const char *argv[] = { "node" };
+    argc += 1;
+#else
+    // "--trace" full trace of execution  produces a lot of info
+    const char *argv[] = { "node", "--logfile", "-", "--log_code" };
+    argc += 4;
+#endif
+    auto i = main(argc, const_cast<char **>(argv));
+
+#endif
+    ebbrt::kprintf("Return Code: %d\n", i);
+    ebbrt::acpi::PowerOff();
+}
 #else
 // UNIX
 int main(int argc, char *argv[]) {

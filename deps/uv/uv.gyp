@@ -121,11 +121,6 @@
         }],
         [ 'OS=="ebbrt"', {
           'cflags': [
-            '-I ${EBBRT_SRCDIR}/baremetal/src/include',
-            '-I ${EBBRT_SRCDIR}/baremetal/ext/tbb/include',
-	    '-I ${EBBRT_SRCDIR}/common/src/include',
-	    '-I ${EBBRT_SRCDIR}/baremetal/ext/boost/include',
-            '-g',
             '-Wall',
             '-Wextra',
             '-Wno-unused-parameter',
@@ -135,7 +130,7 @@
             '-pedantic',
            ],
            'cflags_cc': [
-            '--std=gnu++11',
+            '--std=gnu++14',
            ],
           'sources': [
             'src/ebbrt/uv-ebbrt.cc',

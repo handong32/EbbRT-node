@@ -64,7 +64,7 @@
   'targets': [
     {
       'target_name': 'node',
-      'type': 'static_library',
+      'type': 'executable',
 
       'dependencies': [
         'node_js2c#host',
@@ -264,6 +264,10 @@
           'sources!': [
             'src/cares_wrap.cc',
           ],
+          'cflags_cc': [
+            '--std=gnu++14',
+          ],
+          'libraries': [ '-lebbrt-cmdline -lebbrt-filesystem' ]
         }],
         [ 'OS=="mac"', {
           'libraries': [ '-framework Carbon' ],

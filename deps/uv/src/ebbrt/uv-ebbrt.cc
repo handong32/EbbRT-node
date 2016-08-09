@@ -13,7 +13,7 @@
 #include <ebbrt/Timer.h>
 #include <ebbrt/UniqueIOBuf.h>
 
-#include "../../../../FileSystem.h"
+#include <ebbrt-filesystem/FileSystem.h>
 
 #include "uv.h"
 extern "C" {

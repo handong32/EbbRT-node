@@ -169,7 +169,7 @@
         ],
       }],
       [ 'OS=="ebbrt"', {
-        'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter', '-I ${EBBRT_SRCDIR}/baremetal/src/include', '-I ${EBBRT_SRCDIR}/common/src/include', '-I ${EBBRT_SRCDIR}/baremetal/ext/boost/include', '-I ${EBBRT_SRCDIR}/baremetal/ext/lwip/include'],
+        'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter' ],
         'cflags_cc': [ ],
         'target_conditions': [
           ['_type=="static_library"', {
