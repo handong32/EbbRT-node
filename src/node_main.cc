@@ -64,16 +64,16 @@ int wmain(int argc, wchar_t *wargv[]) {
 #include <ebbrt/Debug.h>
 #include <ebbrt/StaticIds.h>
 
-#ifdef EBBRT_NATIVE_ONLY
 #include <ebbrt-filesystem/FileSystem.h>
+ebbrt::EbbRef<FileSystem> node_fs_ebb;
+
+#ifndef EBBRT_NATIVE_ONLY
 #include <ebbrt-cmdline/CmdLineArgs.h>
 
 enum : ebbrt::EbbId {
   kCmdLineArgsId = ebbrt::kFirstStaticUserId,
   kFileSystemId
 };
-
-ebbrt::EbbRef<FileSystem> node_fs_ebb;
 #endif
 
 void AppMain() {
