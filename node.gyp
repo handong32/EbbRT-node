@@ -239,6 +239,10 @@
           'dependencies': [ 'deps/http_parser/http_parser.gyp:http_parser' ],
         }],
 
+        [ 'OS!="ebbrt" and node_shared_cares=="false"', {
+          'dependencies': [ 'deps/cares/cares.gyp:cares' ],
+        }],
+
         [ 'node_shared_libuv=="false"', {
           'dependencies': [ 'deps/uv/uv.gyp:libuv' ],
         }],

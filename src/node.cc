@@ -1181,16 +1181,22 @@ void DisplayExceptionLine(TryCatch &try_catch) {
 
   // uv_tty_reset_mode();
 
-  // fprintf(stderr, "\n");
+#ifdef __ebbrt__
   ebbrt::kprintf("\n");
+#else
+  fprintf(stderr, "\n");
+#endif
 
   if (!message.IsEmpty()) {
     // Print (filename):(line number): (message).
     String::Utf8Value filename(message->GetScriptResourceName());
     const char *filename_string = *filename;
     int linenum = message->GetLineNumber();
+#ifdef __ebbrt__
     ebbrt::kprintf("%s:%i\n", filename_string, linenum);
-    // fprintf(stderr, "%s:%i\n", filename_string, linenum);
+#else
+    fprintf(stderr, "%s:%i\n", filename_string, linenum);
+#endif
     // Print line of source code.
     String::Utf8Value sourceline(message->GetSourceLine());
     const char *sourceline_string = *sourceline;
@@ -1222,19 +1228,31 @@ void DisplayExceptionLine(TryCatch &try_catch) {
     // fprintf(stderr, "---\nsourceline:%s\noffset:%d\nstart:%d\nend:%d\n---\n",
     // sourceline_string, start, end);
 
-    //fprintf(stderr, "%s\n", sourceline_string);
+#ifdef __ebbrt__
     ebbrt::kprintf("%s\n", sourceline_string);
+#else
+    fprintf(stderr, "%s\n", sourceline_string);
+#endif
     // Print wavy underline (GetUnderline is deprecated).
     for (int i = 0; i < start; i++) {
-      //fputc((sourceline_string[i] == '\t') ? '\t' : ' ', stderr);
+#ifdef __ebbrt__
       ebbrt::kprintf((sourceline_string[i] == '\t') ? "\t" : " ");
+#else
+      fputc((sourceline_string[i] == '\t') ? '\t' : ' ', stderr);
+#endif
     }
     for (int i = start; i < end; i++) {
-      //fputc('^', stderr);
+#ifdef __ebbrt__
       ebbrt::kprintf("^");
+#else
+      fputc('^', stderr);
+#endif
     }
-    //fputc('\n', stderr);
+#ifdef __ebbrt__
     ebbrt::kprintf("\n");
+#else
+    fputc('\n', stderr);
+#endif
   }
 }
 
