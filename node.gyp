@@ -16,6 +16,7 @@
     'node_use_openssl%': 'true',
     'node_use_systemtap%': 'false',
     'node_shared_openssl%': 'false',
+    'ebbrt_script%': 'false',
     'library_files': [
       'src/node.js',
       'lib/_debugger.js',
@@ -267,7 +268,15 @@
           'cflags_cc': [
             '--std=gnu++14',
           ],
-          'libraries': [ '-lebbrt-cmdline -lebbrt-filesystem' ]
+          'libraries': [ '-lebbrt-filesystem' ],
+          'conditions': [
+            ['ebbrt_script=="false"', {
+              'libraries': [ '-lebbrt-cmdline' ],
+              }, {
+              'defines': [ 'EBBRT_NATIVE_ONLY' ],
+              'sources' : [ 'src/<(ebbrt_script).cc' ],
+            }]
+          ]
         }],
         [ 'OS=="mac"', {
           'libraries': [ '-framework Carbon' ],

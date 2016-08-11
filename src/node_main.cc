@@ -64,6 +64,7 @@ int wmain(int argc, wchar_t *wargv[]) {
 #include <ebbrt/Debug.h>
 #include <ebbrt/StaticIds.h>
 
+#ifdef EBBRT_NATIVE_ONLY
 #include <ebbrt-filesystem/FileSystem.h>
 #include <ebbrt-cmdline/CmdLineArgs.h>
 
@@ -73,10 +74,11 @@ enum : ebbrt::EbbId {
 };
 
 ebbrt::EbbRef<FileSystem> node_fs_ebb;
+#endif
 
 void AppMain() {
     putenv(const_cast<char *>("TZ=EST5EDT4,M3.2.0,M11.1.0"));
-#ifndef BM_ONLY
+#ifndef EBBRT_NATIVE_ONLY
     node_fs_ebb =
         FileSystem::Create(&FileSystem::CreateRep(kFileSystemId), kFileSystemId);
     auto cmdlineargs = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
@@ -93,7 +95,7 @@ void AppMain() {
     const char *argv[] = { "node", "--logfile", "-", "--log_code" };
     argc += 4;
 #endif
-    auto i = main(argc, const_cast<char **>(argv));
+    auto i =node::Start(argc, const_cast<char **>(argv));
 
 #endif
     ebbrt::kprintf("Return Code: %d\n", i);

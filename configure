@@ -72,7 +72,7 @@ parser.add_option("--shared-openssl-includes",
     dest="shared_openssl_includes",
     help="Directory containing OpenSSL header files")
 
-parser.add_option("--shared-openssl-libpath",
+parser.add_option("--shared- openssl-libpath",
     action="store",
     dest="shared_openssl_libpath",
     help="A directory to search for the shared OpenSSL DLLs")
@@ -81,6 +81,11 @@ parser.add_option("--shared-openssl-libname",
     action="store",
     dest="shared_openssl_libname",
     help="Alternative lib name to link to (default: 'crypto,ssl')")
+
+parser.add_option("--ebbrt-script",
+    action="store",
+    dest="ebbrt_script",
+    help="Builtin EbbRT stdin script")
 
 # deprecated
 parser.add_option("--openssl-use-sys",
@@ -237,7 +242,7 @@ parser.add_option("--dest-os",
     action="store",
     dest="dest_os",
     help="Operating system to build for. Valid values are: "
-         "win, mac, solaris, freebsd, openbsd, linux")
+                  "win, mac, solaris, ebbrt, freebsd, openbsd, linux")
 
 parser.add_option("--no-ifaddrs",
     action="store_true",
@@ -278,7 +283,6 @@ parser.add_option("--tag",
     help="Custom build tag")
 
 (options, args) = parser.parse_args()
-
 
 def b(value):
   """Returns the string 'true' if value is truthy, 'false' otherwise."""
@@ -640,6 +644,13 @@ def configure_winsdk(o):
 
   print "ctrpp not found in WinSDK path--using pre-gen files from tools/msvs/genfiles."
 
+def configure_ebbrt(o):
+  if flavor != 'ebbrt':
+    return
+  if options.ebbrt_script:
+    o['variables']['ebbrt_script'] = str(options.ebbrt_script)
+  else:
+    o['variables']['ebbrt_script'] = 'false'
 
 # determine the "flavor" (operating system) we're building for,
 # leveraging gyp's GetFlavor function
@@ -647,7 +658,6 @@ flavor_params = {};
 if (options.dest_os):
   flavor_params['flavor'] = options.dest_os;
 flavor = GetFlavor(flavor_params);
-
 output = {
   'variables': { 'python': sys.executable },
   'include_dirs': [],
@@ -664,6 +674,7 @@ configure_libuv(output)
 configure_v8(output)
 configure_openssl(output)
 configure_winsdk(output)
+configure_ebbrt(output)
 
 # variables should be a root level element,
 # move everything else to target_defaults
@@ -707,5 +718,4 @@ else:
   gyp_args += ['-f', 'make-' + flavor]
 
 gyp_args += args
-
 subprocess.call(gyp_args)
