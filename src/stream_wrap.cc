@@ -34,7 +34,7 @@
 #include <limits.h> // INT_MAX
 
 #ifdef __ebbrt__
-#include <ebbrt/CDebug.h>
+#include <ebbrt/native/CDebug.h>
 #endif
 
 #define SLAB_SIZE (1024 * 1024)

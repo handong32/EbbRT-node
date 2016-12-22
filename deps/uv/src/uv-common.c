@@ -29,7 +29,7 @@
 #include <string.h> /* memset */
 
 #ifdef __ebbrt__
-#include <ebbrt/CDebug.h>
+#include <ebbrt/native/CDebug.h>
 #endif
 
 #define XX(uc, lc) case UV_##uc: return sizeof(uv_##lc##_t);

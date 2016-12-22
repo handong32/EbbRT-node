@@ -60,9 +60,9 @@ int wmain(int argc, wchar_t *wargv[]) {
   return node::Start(argc, argv);
 }
 #elif __ebbrt__
-#include <ebbrt/Acpi.h>
-#include <ebbrt/Debug.h>
-#include <ebbrt/StaticIds.h>
+#include <ebbrt/native/Acpi.h>
+#include <ebbrt/native/Debug.h>
+#include <ebbrt/native/StaticIds.h>
 
 #include <ebbrt-filesystem/FileSystem.h>
 ebbrt::EbbRef<FileSystem> node_fs_ebb;

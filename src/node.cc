@@ -26,8 +26,8 @@
 
 #ifdef __ebbrt__
 #undef ebbrt
-#include <ebbrt/Debug.h>
-#include <ebbrt/CDebug.h>
+#include <ebbrt/native/Debug.h>
+#include <ebbrt/native/CDebug.h>
 #endif
 
 #ifndef __ebbrt__

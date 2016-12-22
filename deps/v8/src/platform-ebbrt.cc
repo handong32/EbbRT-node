@@ -16,12 +16,12 @@
 #include <unordered_map>
 #include <utility>
 
-#include <ebbrt/Clock.h>
-#include <ebbrt/Debug.h>
-#include <ebbrt/Fls.h>
-#include <ebbrt/PageAllocator.h>
-#include <ebbrt/VMem.h>
-#include <ebbrt/VMemAllocator.h>
+#include <ebbrt/native/Clock.h>
+#include <ebbrt/native/Debug.h>
+#include <ebbrt/native/Fls.h>
+#include <ebbrt/native/PageAllocator.h>
+#include <ebbrt/native/VMem.h>
+#include <ebbrt/native/VMemAllocator.h>
 
 using std::isnan;
 using std::isfinite;

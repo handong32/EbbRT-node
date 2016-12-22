@@ -28,7 +28,7 @@
 #include "v8.h"
 
 #ifdef __ebbrt__
-#include <ebbrt/Random.h>
+#include <ebbrt/native/Random.h>
 #endif
 
 #include "assembler.h"

@@ -3,7 +3,7 @@
 #include "node.h"
 #include "req_wrap.h"
 
-#include <ebbrt/CDebug.h>
+#include <ebbrt/native/CDebug.h>
 
 namespace node {
 

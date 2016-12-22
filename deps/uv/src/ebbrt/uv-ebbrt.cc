@@ -6,10 +6,10 @@
 #include <cstring>
 #include <queue>
 
-#include <ebbrt/Clock.h>
+#include <ebbrt/native/Clock.h>
 #include <ebbrt/Debug.h>
-#include <ebbrt/Net.h>
-#include <ebbrt/NetMisc.h>
+#include <ebbrt/native/Net.h>
+#include <ebbrt/native/NetMisc.h>
 #include <ebbrt/Timer.h>
 #include <ebbrt/UniqueIOBuf.h>
 

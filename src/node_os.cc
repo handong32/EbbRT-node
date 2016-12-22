@@ -40,7 +40,7 @@
 #endif
 
 #ifdef __ebbrt__
-#include <ebbrt/CDebug.h>
+#include <ebbrt/native/CDebug.h>
 #endif
 
 // Add Windows fallback.
