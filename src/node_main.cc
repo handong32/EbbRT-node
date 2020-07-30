@@ -63,43 +63,67 @@ int wmain(int argc, wchar_t *wargv[]) {
 #include <ebbrt/native/Acpi.h>
 #include <ebbrt/native/Debug.h>
 #include <ebbrt/native/StaticIds.h>
+#include <ebbrt/EventManager.h>
+#include <ebbrt/native/Cpu.h>
+
+#include "TcpCommand.h"
 
 #include <ebbrt-filesystem/FileSystem.h>
 ebbrt::EbbRef<FileSystem> node_fs_ebb;
 
-#ifndef EBBRT_NATIVE_ONLY
-#include <ebbrt-cmdline/CmdLineArgs.h>
-
-enum : ebbrt::EbbId {
-  kCmdLineArgsId = ebbrt::kFirstStaticUserId,
-  kFileSystemId
-};
-#endif
-
 void AppMain() {
-    putenv(const_cast<char *>("TZ=EST5EDT4,M3.2.0,M11.1.0"));
-#ifndef EBBRT_NATIVE_ONLY
-    node_fs_ebb =
-        FileSystem::Create(&FileSystem::CreateRep(kFileSystemId), kFileSystemId);
-    auto cmdlineargs = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
-    auto cmd_argc = cmdlineargs->argc();
-    auto cmd_argv = cmdlineargs->argv();
-    auto i = node::Start(cmd_argc, cmd_argv);
-#else
-    int argc = 0;
-#ifndef __JA_V8_PROFILE_HACK__
-    const char *argv[] = { "node" };
-    argc += 1;
-#else
-    // "--trace" full trace of execution  produces a lot of info
-    const char *argv[] = { "node", "--logfile", "-", "--log_code" };
-    argc += 4;
-#endif
-    auto i =node::Start(argc, const_cast<char **>(argv));
 
-#endif
-    ebbrt::kprintf("Return Code: %d\n", i);
-    ebbrt::acpi::PowerOff();
+  uint32_t ncores = static_cast<uint32_t>(ebbrt::Cpu::Count());  
+  for (uint32_t i = 0; i < ncores; i++) {
+    ebbrt::Promise<void> p;
+    auto f = p.GetFuture();
+    ebbrt::event_manager->SpawnRemote(
+      [ncores, i, &p] () mutable {
+	// disables turbo boost, thermal control circuit
+	ebbrt::msr::Write(IA32_MISC_ENABLE, 0x4000850081);
+	// same p state as Linux with performance governor
+	ebbrt::msr::Write(IA32_PERF_CTL, 0x1D00);
+
+	uint64_t ii, jj, sum=0, sum2=0;
+	for(ii=0;ii<ncores;ii++) {	  
+	  for(jj=0;jj<IXGBE_LOG_SIZE;jj++) {
+	    sum += ixgbe_logs[ii][jj].Fields.tsc;
+	  }
+	  
+	  uint8_t* ptr = bsendbufs[ii]->MutData();
+	  for(jj=0;jj<IXGBE_MAX_DATA_PER_TXD;jj++) {
+	    sum2 += ptr[ii];
+	  }
+	}
+	
+	ebbrt::kprintf_force("Cpu=%u Sum=%llu Sum2=%llu\n", i, sum, sum2);
+	p.SetValue();
+      }, i);
+    f.Block();
+  }
+  
+  ebbrt::event_manager->SpawnRemote(
+    [] () mutable {
+      putenv(const_cast<char *>("TZ=EST5EDT4,M3.2.0,M11.1.0"));
+
+      auto id2 = ebbrt::ebb_allocator->AllocateLocal();
+      auto tcps = ebbrt::EbbRef<ebbrt::TcpCommand>(id2);
+      tcps->Start(5002);
+      ebbrt::kprintf_force("TcpCommand server listening on port %d\n", 5002);
+  
+      /*auto uid = ebbrt::ebb_allocator->AllocateLocal();
+	auto udpc = ebbrt::EbbRef<ebbrt::UdpCommand>(uid);
+      udpc->Start(6666);
+      ebbrt::kprintf("Core %u: UdpCommand server listening on port %d\n", static_cast<uint32_t>(ebbrt::Cpu::GetMine()), 6666);*/
+      
+      int argc = 0;
+      const char *argv[] = { "node" };
+      argc += 1;
+      auto i =node::Start(argc, const_cast<char **>(argv));
+      
+      ebbrt::kprintf("Return Code: %d\n", i);
+      ebbrt::acpi::PowerOff();
+    }, 1);
 }
 #else
 // UNIX

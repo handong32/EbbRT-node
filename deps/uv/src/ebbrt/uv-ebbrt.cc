@@ -12,6 +12,8 @@
 #include <ebbrt/native/NetMisc.h>
 #include <ebbrt/Timer.h>
 #include <ebbrt/UniqueIOBuf.h>
+#include <ebbrt/native/Trace.h>
+#include <ebbrt/native/IxgbeDriver.h>
 
 #include <ebbrt-filesystem/FileSystem.h>
 
@@ -281,6 +283,11 @@ int uv_tcp_listen(uv_tcp_t *handle, int backlog, uv_connection_cb cb) {
 }
 
 int uv_tcp_accept(uv_tcp_t *server, uv_tcp_t *client) {
+  //ebbrt::kprintf_force("uv_tcp_accept\n");
+  uint32_t mycore = static_cast<uint32_t>(ebbrt::Cpu::GetMine());      
+  uint64_t now = ebbrt::trace::rdtsc();
+  ixgbe_stats[mycore].rdtsc_start = now;
+    
   auto accept_queue =
       static_cast<std::queue<UVTcpHandler *> *>(server->accepted_queue);
   kassert(accept_queue);
@@ -531,7 +538,7 @@ extern ebbrt::EbbRef<FileSystem> node_fs_ebb;
 
 extern "C" int uv_fs_close(uv_loop_t *loop, uv_fs_t *req, uv_file file,
                            uv_fs_cb cb) {
-  ebbrt::kprintf("TODO(dschatz): Actually close\n");
+  //ebbrt::kprintf("TODO(dschatz): Actually close\n");
   FS_INIT(CLOSE);
   req->result = 0;
   if (req->cb) {
@@ -662,7 +669,7 @@ extern "C" int uv_fs_write(uv_loop_t *loop, uv_fs_t *req, uv_file fd, void *buf,
   if (cb)
     EBBRT_UNIMPLEMENTED();
 
-  ebbrt::force_kprintf("%.*s", length, static_cast<const char *>(buf));
+  ebbrt::kprintf_force("%.*s", length, static_cast<const char *>(buf));
   uv__req_unregister(req->loop, req);
 
   return 0;
@@ -955,11 +962,15 @@ void uv__tcp_close(uv_tcp_t *handle, uv_close_cb cb) {
 
 extern "C" void uv_close(uv_handle_t *handle, uv_close_cb cb) {
   handle->flags |= UV_CLOSING;
-
+  uint32_t mycore = static_cast<uint32_t>(ebbrt::Cpu::GetMine());
+  
   switch (handle->type) {
-  case UV_TCP:
+  case UV_TCP: {    
+    uint64_t now = ebbrt::trace::rdtsc();
+    ixgbe_stats[mycore].rdtsc_end = now;
     uv__tcp_close((uv_tcp_t *)handle, cb);
     break;
+  }
   default:
     EBBRT_UNIMPLEMENTED();
     break;
@@ -1630,9 +1641,9 @@ extern "C" in_addr_t inet_addr(const char *cp) {
 }
 
 extern "C" int uv__tcp_bind(uv_tcp_t *handle, struct sockaddr_in addr) {
-  if (!(addr.sin_addr.s_addr == 0 ||
-        addr.sin_addr.s_addr == inet_addr("127.0.0.1")))
-    EBBRT_UNIMPLEMENTED();
+//  if (!(addr.sin_addr.s_addr == 0 ||
+  //       addr.sin_addr.s_addr == inet_addr("127.0.0.1")))
+  //EBBRT_UNIMPLEMENTED();
 
   handle->flags |= UV_STREAM_READABLE | UV_STREAM_WRITABLE;
   handle->bind_port = ntohs(addr.sin_port);
@@ -1701,8 +1712,8 @@ extern "C" int uv_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
     return uv__set_artificial_error(loop, UV_ENOMEM);
   }
 
-  if (strcmp(node, "localhost") != 0)
-    EBBRT_UNIMPLEMENTED();
+  //if (strcmp(node, "localhost") != 0)
+  // EBBRT_UNIMPLEMENTED();
 
   if (hints->ai_flags != 0)
     EBBRT_UNIMPLEMENTED();
@@ -1731,7 +1742,7 @@ extern "C" int uv_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
   auto addr = reinterpret_cast<sockaddr_in *>(req->res->ai_addr);
   addr->sin_family = AF_INET;
   addr->sin_port = 0;
-  uv_inet_pton(AF_INET, "127.0.0.1", &addr->sin_addr.s_addr);
+  uv_inet_pton(AF_INET, "192.168.1.200", &addr->sin_addr.s_addr);
 
   req->res->ai_canonname = strdup("localhost");
   if (req->res->ai_canonname == nullptr) {

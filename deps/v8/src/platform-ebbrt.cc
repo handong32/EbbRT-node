@@ -417,9 +417,9 @@ v8::internal::VirtualMemory::VirtualMemory(size_t size, size_t alignment) {
 }
 
 v8::internal::VirtualMemory::~VirtualMemory() {
-  if (address_ != nullptr) {
-    ebbrt::kprintf("TODO(dschatz): Free Virtual Region\n");
-  }
+  //if (address_ != nullptr) {
+    //ebbrt::kprintf("TODO(dschatz): Free Virtual Region\n");
+  //}
 }
 
 bool v8::internal::VirtualMemory::IsReserved() { return address_ != nullptr; }
@@ -464,9 +464,9 @@ bool v8::internal::VirtualMemory::UncommitRegion(void *base, size_t size) {
 
 bool v8::internal::VirtualMemory::ReleaseRegion(void *base, size_t size) {
   auto addr = reinterpret_cast<uint64_t>(base);
-  ebbrt::kprintf("TODO(dschatz): Actually release region %#018" PRIx64
+  /*ebbrt::kprintf("TODO(dschatz): Actually release region %#018" PRIx64
                  " - %#018" PRIx64 "\n",
-                 addr, addr + size - 1);
+                 addr, addr + size - 1);*/
   return true;
 }
 
