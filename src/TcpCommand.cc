@@ -32,44 +32,55 @@ void ebbrt::TcpCommand::TcpSession::Receive(std::unique_ptr<MutIOBuf> b) {
   token1 = s.substr(0, pos);
   token2 = s.substr(pos+1, s.length());
   param = static_cast<uint32_t>(atoi(token2.c_str()));
-  ebbrt::kprintf_force("Core: %u TcpCommand::Receive() s=%s token1=%s param=%u\n", mcore, s.c_str(), token1.c_str(), param);
+  //ebbrt::kprintf_force("Core: %u TcpCommand::Receive() s=%s token1=%s param=%u\n", mcore, s.c_str(), token1.c_str(), param);
   
   if (token1 == "start") {
     ebbrt::kprintf_force("start()\n");
-    for (uint32_t i = 0; i < ncores; i++) {
-      network_manager->Config("start_stats", i);
-    }    
+    //for (uint32_t i = 0; i < ncores; i++) {
+    //  network_manager->Config("start_stats", i);
+    //}
+    network_manager->Config("start_stats", 1);
+    
   } else if (token1 == "stop") {
     ebbrt::kprintf_force("stop()\n");
-    for (uint32_t i = 0; i < ncores; i++) {
-      network_manager->Config("stop_stats", i);
-    }    
+    //for (uint32_t i = 0; i < ncores; i++) {
+    //  network_manager->Config("stop_stats", i);
+    //}
+    network_manager->Config("stop_stats", 1);
+    
   } else if (token1 == "clear") {
     ebbrt::kprintf_force("clear()\n");
-    for (uint32_t i = 0; i < ncores; i++) {
-      network_manager->Config("clear_stats", i);
-    }
+    //for (uint32_t i = 0; i < ncores; i++) {
+    //  network_manager->Config("clear_stats", i);
+    // }
+    network_manager->Config("clear_stats", 1);
+    
   } else if (token1 == "rx_usecs") {
     ebbrt::kprintf_force("itr %u\n", param);
-    for (uint32_t i = 0; i < ncores; i++) {
+    /*for (uint32_t i = 0; i < ncores; i++) {
       event_manager->SpawnRemote(
 	[token1, param, i] () mutable {
 	  network_manager->Config(token1, param);
 	}, i);
-    }
+	}*/
+    event_manager->SpawnRemote(
+      [token1, param] () mutable {
+	network_manager->Config(token1, param);
+      }, 1);
     
   } else if (token1 == "dvfs") {
-    ebbrt::kprintf_force("dvfs %s\n", token2.c_str());
-    for (uint32_t i = 0; i < ncores; i++) {
-      event_manager->SpawnRemote(
-	[param, i] () mutable {
-	  // same p state as Linux with performance governor
-	  ebbrt::msr::Write(IA32_PERF_CTL, param);    
-	}, i);
-    }
+    ebbrt::kprintf_force("dvfs %u\n", param);
+    //for (uint32_t i = 0; i < ncores; i++) {
+    event_manager->SpawnRemote(
+      [param] () mutable {
+	// same p state as Linux with performance governor
+	ebbrt::msr::Write(IA32_PERF_CTL, param);    
+      }, 1);
+      //}
     
   } else if (token1 == "rapl") {
     ebbrt::kprintf_force("rapl %u\n", param);
+    
     for (uint32_t i = 0; i < 2; i++) {
       event_manager->SpawnRemote(
 	[token1, param, i] () mutable {
@@ -150,34 +161,6 @@ void ebbrt::TcpCommand::TcpSession::Receive(std::unique_ptr<MutIOBuf> b) {
   } else {
     ebbrt::kprintf_force("Unknown command %s\n", token1.c_str());
   }
-  
-
-  // reply buffer pointer  
-  /*std::string tmp = "test test test";
-  auto rbuf = MakeUniqueIOBuf(tmp.length(), false);
-  auto dp = rbuf->GetMutDataPointer();
-  std::memcpy(static_cast<void*>(dp.Data()), tmp.data(), tmp.length());  
-
-  Send(std::move(rbuf));*/
-  
-  /*uint8_t* re = (uint8_t*)(ixgbe_logs[13]);
-  uint64_t msg_size = 1000000 * sizeof(union IxgbeLogEntry);
-  uint64_t sum = 0;
-  for(uint64_t i = 0; i < IXGBE_TSO_LIMIT; i++) {
-    sum += re[i];
-  }
-  ebbrt::kprintf_force("SendLog() sum=%lu\n", sum);
-  ebbrt::kprintf_force("SendLog() msg_size=%llu\n", msg_size);
-  while(msg_size > IXGBE_MAX_DATA_PER_TXD) {
-    auto buf = std::make_unique<ebbrt::StaticIOBuf>(re, IXGBE_MAX_DATA_PER_TXD);
-    Send(std::move(buf));      
-    msg_size -= IXGBE_MAX_DATA_PER_TXD;
-    re += IXGBE_MAX_DATA_PER_TXD;
-  }
-  if(msg_size) {
-    auto buf = std::make_unique<ebbrt::StaticIOBuf>(re, msg_size);
-    Send(std::move(buf));      
-    }*/
 }
 
 

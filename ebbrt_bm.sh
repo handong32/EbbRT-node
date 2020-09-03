@@ -1,0 +1,1 @@
+CC=/home/handong/sysroot_atc/native_release/usr/bin/x86_64-pc-ebbrt-gcc CXX=/home/handong/sysroot_atc/native_release/usr/bin/x86_64-pc-ebbrt-g++ ./configure --dest-os=ebbrt --without-ssl --without-npm --without-snapshot --dest-cpu=x64 --ebbrt-script=hello_http
